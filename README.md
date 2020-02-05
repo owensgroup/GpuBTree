@@ -16,7 +16,7 @@ The repository contains two sample driver code for [build](https://github.com/ow
 To test the code after building you can run: `./bin/test_map numberOfKeys` `./bin/test_search numberOfKeys numberOfQueries`
 
 ## Limitaions
-- 32-bit keys and values ranging between (1 to 2^32 - 3)
+- 32-bit keys and values ranging between (0 to 2^32 - 3)
 
 # Questions or Bug Report
 This code was tested on an NVIDIA Tesla K40c and Volta Titan V GPUs. Please open an [issue](https://github.com/owensgroup/GpuBTree/issues) if you find any bugs or if you have any questions. This [issue](https://github.com/owensgroup/GpuBTree/issues/1) contains the planned future additions to this repository.
