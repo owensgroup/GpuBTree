@@ -12,7 +12,7 @@ Muhammad A. Awad, Saman Ashkiani, Rob Johnson, Martín Farach-Colton, and John D
 5. `make`
 
 ## Sample Driver Code
-The repository contains two sample driver code for build and query operations.
+The repository contains two sample driver code for [build](https://github.com/owensgroup/GpuBTree/blob/master/test/test_map.cu) and [query](https://github.com/owensgroup/GpuBTree/blob/master/test/test_map_search.cu) operations.
 To test the code after building you can run: `./bin/test_map numberOfKeys` `./bin/test_search numberOfKeys numberOfQueries`
 
 ## Limitaions
