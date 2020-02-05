@@ -6,7 +6,7 @@ Muhammad A. Awad, Saman Ashkiani, Rob Johnson, Martín Farach-Colton, and John D
 
 ## Cloning and Building
 1. Clone: `git clone https://github.com/owensgroup/GpuBTree.git`
-2. Update the CMakeLists.txt with the GPU hardware architecture
+2. Update the [CMakeLists.txt](https://github.com/owensgroup/GpuBTree/blob/master/CMakeLists.txt#L39) with the GPU hardware architecture
 3. `mkdir build && cd build`
 4. `cmake ..`
 5. `make`
@@ -15,7 +15,7 @@ Muhammad A. Awad, Saman Ashkiani, Rob Johnson, Martín Farach-Colton, and John D
 The repository contains two sample driver code for build and query operations.
 To test the code after building you can run: `./bin/test_map numberOfKeys` `./bin/test_search numberOfKeys numberOfQueries`
 
-#Limitaions
+## Limitaions
 - 32-bit keys and values ranging between (1 to 2^32 - 3)
 
 # Questions or Bug Report
