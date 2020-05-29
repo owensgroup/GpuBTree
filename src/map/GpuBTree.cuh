@@ -25,120 +25,127 @@
 
 #pragma once
 
-#include <cstdint>
 #include <stdio.h>
 
+#include <cstdint>
 
-namespace GpuBTree{
+namespace GpuBTree {
 
-	template <typename SizeT, typename KeyT, typename ValueT, typename AllocatorT = BoolAllocator>
-	class GpuBTreeMap
-	{
-	private:
-		static constexpr uint32_t EMPTY_KEY = 0xFFFFFFFF ;
-		static constexpr uint32_t DELETED_KEY = 0xFFFFFFFF;
-		static constexpr uint32_t BLOCKSIZE_BUILD_ = 128;
-		static constexpr uint32_t BLOCKSIZE_SEARCH_ = 1024;
-		
-		SizeT _num_keys;
-		int _device_id;
-		uint32_t* _d_root;
-		AllocatorT _mem_allocator;
+template<typename SizeT,
+         typename KeyT,
+         typename ValueT,
+         typename AllocatorT = BoolAllocator>
+class GpuBTreeMap {
+ private:
+  static constexpr uint32_t EMPTY_KEY = 0xFFFFFFFF;
+  static constexpr uint32_t DELETED_KEY = 0xFFFFFFFF;
+  static constexpr uint32_t BLOCKSIZE_BUILD_ = 128;
+  static constexpr uint32_t BLOCKSIZE_SEARCH_ = 1024;
 
-		cudaError_t initBTree(uint32_t*& root , cudaStream_t stream_id = 0);
-		cudaError_t insertKeys(uint32_t*& root, KeyT*& d_keys, ValueT*& d_values, SizeT& count, cudaStream_t stream_id = 0);
-		cudaError_t searchKeys(uint32_t*& root, KeyT*& d_queries, ValueT*& d_results, SizeT& count, cudaStream_t stream_id = 0);
+  SizeT _num_keys;
+  int _device_id;
+  uint32_t* _d_root;
+  AllocatorT _mem_allocator;
 
-		bool _handle_memory;
+  cudaError_t initBTree(uint32_t*& root, cudaStream_t stream_id = 0);
+  cudaError_t insertKeys(uint32_t*& root,
+                         KeyT*& d_keys,
+                         ValueT*& d_values,
+                         SizeT& count,
+                         cudaStream_t stream_id = 0);
+  cudaError_t searchKeys(uint32_t*& root,
+                         KeyT*& d_queries,
+                         ValueT*& d_results,
+                         SizeT& count,
+                         cudaStream_t stream_id = 0);
 
-	public:
-		GpuBTreeMap(AllocatorT* mem_allocator = nullptr, int device_id = 0){
-			if(mem_allocator){
-				_mem_allocator = *mem_allocator;
-				_handle_memory = false;
-			}
-			else{
-				BoolAllocator allocator;
-				allocator.init();
-				_mem_allocator = allocator;
-				_mem_allocator.init();
-				CHECK_ERROR(memoryUtil::deviceAlloc(_d_root, 1));
-				_handle_memory = true;
-			}
-			_device_id = device_id;
-			CHECK_ERROR(cudaSetDevice(_device_id));
-			initBTree(_d_root);	
-		}
-		cudaError_t init(AllocatorT mem_allocator, uint32_t* root_, int deviceId = 0){
-			_device_id = deviceId;
-			_mem_allocator = mem_allocator;
-			_d_root = root_; //assumes that the root already contains a one
-			return cudaSuccess;
-		}	
-		~GpuBTreeMap(){
-		}
-		void free(){
-			if(_handle_memory){
-				CHECK_ERROR(cudaDeviceSynchronize());
-				_mem_allocator.free();
-			}
-		}
+  bool _handle_memory;
 
-		__host__ __device__
-		AllocatorT* getAllocator(){
-			return &_mem_allocator;
-		}
-		__host__ __device__
-		uint32_t* getRoot(){
-			return _d_root;
-		}
-		cudaError_t insertKeys(KeyT* keys, ValueT* values, SizeT count, SourceT source = SourceT::DEVICE){
-			KeyT* d_keys; ValueT* d_values;
-			if(source == SourceT::HOST){
-				CHECK_ERROR(memoryUtil::deviceAlloc(d_keys, count));
-				CHECK_ERROR(memoryUtil::deviceAlloc(d_values, count));
-				CHECK_ERROR(memoryUtil::cpyToDevice(keys, d_keys, count));
-				CHECK_ERROR(memoryUtil::cpyToDevice(values, d_values, count));
-			} else{
-				d_keys = keys;
-				d_values = values;
-			}
+ public:
+  GpuBTreeMap(AllocatorT* mem_allocator = nullptr, int device_id = 0) {
+    if (mem_allocator) {
+      _mem_allocator = *mem_allocator;
+      _handle_memory = false;
+    } else {
+      BoolAllocator allocator;
+      allocator.init();
+      _mem_allocator = allocator;
+      _mem_allocator.init();
+      CHECK_ERROR(memoryUtil::deviceAlloc(_d_root, 1));
+      _handle_memory = true;
+    }
+    _device_id = device_id;
+    CHECK_ERROR(cudaSetDevice(_device_id));
+    initBTree(_d_root);
+  }
+  cudaError_t init(AllocatorT mem_allocator, uint32_t* root_, int deviceId = 0) {
+    _device_id = deviceId;
+    _mem_allocator = mem_allocator;
+    _d_root = root_;  // assumes that the root already contains a one
+    return cudaSuccess;
+  }
+  ~GpuBTreeMap() {}
+  void free() {
+    if (_handle_memory) {
+      CHECK_ERROR(cudaDeviceSynchronize());
+      _mem_allocator.free();
+    }
+  }
 
-			CHECK_ERROR(insertKeys(_d_root,  d_keys, d_values, count));
+  __host__ __device__ AllocatorT* getAllocator() { return &_mem_allocator; }
+  __host__ __device__ uint32_t* getRoot() { return _d_root; }
+  cudaError_t insertKeys(KeyT* keys,
+                         ValueT* values,
+                         SizeT count,
+                         SourceT source = SourceT::DEVICE) {
+    KeyT* d_keys;
+    ValueT* d_values;
+    if (source == SourceT::HOST) {
+      CHECK_ERROR(memoryUtil::deviceAlloc(d_keys, count));
+      CHECK_ERROR(memoryUtil::deviceAlloc(d_values, count));
+      CHECK_ERROR(memoryUtil::cpyToDevice(keys, d_keys, count));
+      CHECK_ERROR(memoryUtil::cpyToDevice(values, d_values, count));
+    } else {
+      d_keys = keys;
+      d_values = values;
+    }
 
-			if(source == SourceT::HOST){
-				CHECK_ERROR(memoryUtil::deviceFree(d_keys));
-				CHECK_ERROR(memoryUtil::deviceFree(d_values));
-			}
+    CHECK_ERROR(insertKeys(_d_root, d_keys, d_values, count));
 
-			return cudaSuccess;
-		}
+    if (source == SourceT::HOST) {
+      CHECK_ERROR(memoryUtil::deviceFree(d_keys));
+      CHECK_ERROR(memoryUtil::deviceFree(d_values));
+    }
 
+    return cudaSuccess;
+  }
 
-		cudaError_t searchKeys(KeyT* queries, ValueT* results, SizeT count, SourceT source = SourceT::DEVICE){
-			KeyT* d_queries; ValueT* d_results;
-			if(source == SourceT::HOST){
-				CHECK_ERROR(memoryUtil::deviceAlloc(d_queries, count));
-				CHECK_ERROR(memoryUtil::deviceAlloc(d_results, count));
+  cudaError_t searchKeys(KeyT* queries,
+                         ValueT* results,
+                         SizeT count,
+                         SourceT source = SourceT::DEVICE) {
+    KeyT* d_queries;
+    ValueT* d_results;
+    if (source == SourceT::HOST) {
+      CHECK_ERROR(memoryUtil::deviceAlloc(d_queries, count));
+      CHECK_ERROR(memoryUtil::deviceAlloc(d_results, count));
 
-				CHECK_ERROR(memoryUtil::cpyToDevice(queries, d_queries, count));
-			} else{
-				d_queries = queries;
-				d_results = results;
-			}
+      CHECK_ERROR(memoryUtil::cpyToDevice(queries, d_queries, count));
+    } else {
+      d_queries = queries;
+      d_results = results;
+    }
 
-			CHECK_ERROR(searchKeys(_d_root,  d_queries, d_results, count));
+    CHECK_ERROR(searchKeys(_d_root, d_queries, d_results, count));
 
-			if(source == SourceT::HOST){
-				CHECK_ERROR(memoryUtil::cpyToHost(d_results, results, count));
-				CHECK_ERROR(memoryUtil::deviceFree(d_queries));
-				CHECK_ERROR(memoryUtil::deviceFree(d_results));
-			}
+    if (source == SourceT::HOST) {
+      CHECK_ERROR(memoryUtil::cpyToHost(d_results, results, count));
+      CHECK_ERROR(memoryUtil::deviceFree(d_queries));
+      CHECK_ERROR(memoryUtil::deviceFree(d_results));
+    }
 
-			return cudaSuccess;
-		}		
-		cudaError_t deleteKeys(KeyT* keys, SizeT count, SourceT source = SourceT::DEVICE){
-
-		}
-	};
+    return cudaSuccess;
+  }
+  cudaError_t deleteKeys(KeyT* keys, SizeT count, SourceT source = SourceT::DEVICE) {}
 };
+};  // namespace GpuBTree
