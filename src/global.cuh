@@ -25,10 +25,9 @@
 
 #pragma once
 
-enum class SourceT{
-	DEVICE,
-	HOST,
+enum class SourceT {
+  DEVICE,
+  HOST,
 };
-
 
 #define WARP_MASK 0xFFFFFFFF

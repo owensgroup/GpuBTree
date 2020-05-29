@@ -24,58 +24,49 @@
 /************************************************************************************/
 
 #pragma once
-#include <cstdint>
 #include <stdio.h>
 
-class BoolAllocator
-{
+#include <cstdint>
 
-public:
-	BoolAllocator(){}
-	~BoolAllocator(){}
-	void init(){
-		CHECK_ERROR(memoryUtil::deviceAlloc(d_bool, MAX_SIZE));
-		CHECK_ERROR(memoryUtil::deviceSet(d_bool, MAX_SIZE, 0x00));
-		CHECK_ERROR(memoryUtil::deviceAlloc(d_count, 1));
-		CHECK_ERROR(memoryUtil::deviceSet(d_count, uint32_t(1), 0x00));
-	}
-	void free(){
-		CHECK_ERROR(memoryUtil::deviceFree(d_bool));
-		CHECK_ERROR(memoryUtil::deviceFree(d_count));
-	}
+class BoolAllocator {
+ public:
+  BoolAllocator() {}
+  ~BoolAllocator() {}
+  void init() {
+    CHECK_ERROR(memoryUtil::deviceAlloc(d_bool, MAX_SIZE));
+    CHECK_ERROR(memoryUtil::deviceSet(d_bool, MAX_SIZE, 0x00));
+    CHECK_ERROR(memoryUtil::deviceAlloc(d_count, 1));
+    CHECK_ERROR(memoryUtil::deviceSet(d_count, uint32_t(1), 0x00));
+  }
+  void free() {
+    CHECK_ERROR(memoryUtil::deviceFree(d_bool));
+    CHECK_ERROR(memoryUtil::deviceFree(d_count));
+  }
 
-  	BoolAllocator& operator=(const BoolAllocator& rhs) {
-  	  d_bool = rhs.d_bool;
-  	  d_count = rhs.d_count;
-  	  return *this;
-  	}
+  BoolAllocator& operator=(const BoolAllocator& rhs) {
+    d_bool = rhs.d_bool;
+    d_count = rhs.d_count;
+    return *this;
+  }
 
-	template<typename AddressT = uint32_t>
-	__device__ __forceinline__ AddressT allocate(){
-		return atomicAdd(d_count, 1);
-	}
-	template<typename AddressT = uint32_t>
-	__device__ __forceinline__ uint32_t* getAddressPtr(AddressT& address){
-		return d_bool + address * 32;
-	}
-	template<typename AddressT= uint32_t>
-	__device__ __forceinline__ void freeAddress(AddressT& address){
-	}
+  template<typename AddressT = uint32_t>
+  __device__ __forceinline__ AddressT allocate() {
+    return atomicAdd(d_count, 1);
+  }
+  template<typename AddressT = uint32_t>
+  __device__ __forceinline__ uint32_t* getAddressPtr(AddressT& address) {
+    return d_bool + address * 32;
+  }
+  template<typename AddressT = uint32_t>
+  __device__ __forceinline__ void freeAddress(AddressT& address) {}
 
-	__host__ __device__
-	uint32_t getCapacity(){
-		return MAX_SIZE;
-	}
+  __host__ __device__ uint32_t getCapacity() { return MAX_SIZE; }
 
-	__host__ __device__
-	uint32_t getOffset(){
-		return *d_count;
-	}
+  __host__ __device__ uint32_t getOffset() { return *d_count; }
 
-private:
-	uint32_t* d_bool;
-	
-	uint32_t MAX_SIZE = 1 << 30;
-	uint32_t* d_count;
+ private:
+  uint32_t* d_bool;
 
+  uint32_t MAX_SIZE = 1 << 25;
+  uint32_t* d_count;
 };

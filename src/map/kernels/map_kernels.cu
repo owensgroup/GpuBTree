@@ -27,82 +27,76 @@
 
 #include <cstdint>
 
-namespace GpuBTree{
-	namespace kernels
-	{
-		template < typename KeyT, typename ValueT, typename SizeT, typename AllocatorT>
-		__global__ void insert_keys(
-			uint32_t* d_root,
-			KeyT* d_keys,
-			ValueT* d_values,
-			SizeT num_keys,
-			AllocatorT allocator)
-		{
-			uint32_t tid = threadIdx.x + blockIdx.x * blockDim.x;
-			uint32_t laneId = threadIdx.x & 0x1F;
-			
-			KeyT	myKey;
-			ValueT	myValue;
-			bool	to_insert = false;
-		
-			if ((tid - laneId) >= num_keys)
-				return;
-		
-			if (tid < num_keys) {
-				myKey = d_keys[tid] + 2;
-				myValue = d_values[tid] + 2;
-				to_insert = true;
-			}		
-		
-			warps::insertion_unit(to_insert, myKey, myValue, d_root, &allocator);
-		}
+namespace GpuBTree {
+namespace kernels {
+template<typename KeyT, typename ValueT, typename SizeT, typename AllocatorT>
+__global__ void insert_keys(uint32_t* d_root,
+                            KeyT* d_keys,
+                            ValueT* d_values,
+                            SizeT num_keys,
+                            AllocatorT allocator) {
+  uint32_t tid = threadIdx.x + blockIdx.x * blockDim.x;
+  uint32_t laneId = threadIdx.x & 0x1F;
 
-		template<typename AllocatorT>
-		__global__ void init_btree(uint32_t* d_root, AllocatorT allocator)
-		{
-			uint32_t laneId = threadIdx.x & 0x1F;
+  KeyT myKey;
+  ValueT myValue;
+  bool to_insert = false;
 
-			uint32_t root_id;
-			if(laneId == 0)
-				root_id = allocator.allocate();
-			
-			root_id = __shfl_sync(WARP_MASK, root_id, 0);
+  if ((tid - laneId) >= num_keys)
+    return;
 
-			*d_root = root_id;
-			uint32_t* tree_root= allocator.getAddressPtr(root_id);
-			
-			if(laneId < 2)
-				tree_root[laneId] = 1 - laneId;
-		}
+  if (tid < num_keys) {
+    myKey = d_keys[tid] + 2;
+    myValue = d_values[tid] + 2;
+    to_insert = true;
+  }
 
+  warps::insertion_unit(to_insert, myKey, myValue, d_root, &allocator);
+}
 
-		template < typename KeyT, typename ValueT, typename SizeT, typename AllocatorT>
-		__global__ void search_b_tree(
-			uint32_t* d_root,
-			KeyT*		d_queries,
-			ValueT* 	d_results,
-			SizeT	 	num_queries,
-			AllocatorT allocator)
-		{
-			uint32_t tid = threadIdx.x + blockIdx.x * blockDim.x;
-			uint32_t laneId = threadIdx.x & 0x1F;
-			if ((tid - laneId) >= num_queries) return;
-		
-			uint32_t 	myQuery = 0;
-			uint32_t 	myResult = SEARCH_NOT_FOUND;
-			bool 			to_search = false;
-		
-			if (tid < num_queries) {
-				myQuery = d_queries[tid] + 2;
-				to_search = true;
-			}
-		
-			warps::search_unit(to_search, laneId, myQuery, myResult, d_root, &allocator);
-		
-			if (tid < num_queries)
-				myResult = myResult ? myResult - 2 : myResult;
-				d_results[tid] = myResult;
-		}
+template<typename AllocatorT>
+__global__ void init_btree(uint32_t* d_root, AllocatorT allocator) {
+  uint32_t laneId = threadIdx.x & 0x1F;
 
-	};
-};
+  uint32_t root_id;
+  if (laneId == 0)
+    root_id = allocator.allocate();
+
+  root_id = __shfl_sync(WARP_MASK, root_id, 0);
+
+  *d_root = root_id;
+  uint32_t* tree_root = allocator.getAddressPtr(root_id);
+
+  if (laneId < 2)
+    tree_root[laneId] = 1 - laneId;
+}
+
+template<typename KeyT, typename ValueT, typename SizeT, typename AllocatorT>
+__global__ void search_b_tree(uint32_t* d_root,
+                              KeyT* d_queries,
+                              ValueT* d_results,
+                              SizeT num_queries,
+                              AllocatorT allocator) {
+  uint32_t tid = threadIdx.x + blockIdx.x * blockDim.x;
+  uint32_t laneId = threadIdx.x & 0x1F;
+  if ((tid - laneId) >= num_queries)
+    return;
+
+  uint32_t myQuery = 0;
+  uint32_t myResult = SEARCH_NOT_FOUND;
+  bool to_search = false;
+
+  if (tid < num_queries) {
+    myQuery = d_queries[tid] + 2;
+    to_search = true;
+  }
+
+  warps::search_unit(to_search, laneId, myQuery, myResult, d_root, &allocator);
+
+  if (tid < num_queries)
+    myResult = myResult ? myResult - 2 : myResult;
+  d_results[tid] = myResult;
+}
+
+};  // namespace kernels
+};  // namespace GpuBTree

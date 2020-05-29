@@ -23,142 +23,137 @@
 /************************************************************************************/
 /************************************************************************************/
 
+#include <stdio.h>
+#include <stdlib.h>
 
-#include "GpuBTree.h"
-#include <vector>
-#include <stdio.h> 
-#include <stdlib.h> 
 #include <algorithm>
 #include <random>
+#include <vector>
 
+#include "GpuBTree.h"
 
+int main(int argc, char* argv[]) {
+  GpuBTree::GpuBTreeMap<uint32_t, uint32_t, uint32_t> btree;
 
-int main(int argc, char *argv[]){
-	
-	GpuBTree::GpuBTreeMap<uint32_t, uint32_t, uint32_t> btree;
+  // Input number of keys
+  uint32_t numKeys = 1 << 20;
+  if (argc > 1)
+    numKeys = std::atoi(argv[1]);
 
-	//Input number of keys
-	uint32_t numKeys = 1 << 20;
-	if(argc > 1)
-		numKeys = std::atoi(argv[1]);
+  // RNG
+  std::random_device rd;
+  std::mt19937 g(rd());
 
-	// RNG
-	std::random_device rd;
-    std::mt19937 g(rd());
+  ///////////////////////////////////
+  ///		 Build the tree    	  ///
+  ///////////////////////////////////
 
-	///////////////////////////////////
-	///		 Build the tree    		///
-	///////////////////////////////////
+  // Prepare the keys
+  std::vector<uint32_t> keys;
+  std::vector<uint32_t> values;
+  keys.reserve(numKeys);
+  values.reserve(numKeys);
+  for (int iKey = 0; iKey < numKeys; iKey++) {
+    keys.push_back(iKey);
+  }
 
-	//Prepare the keys
-	std::vector<uint32_t> keys;
-	std::vector<uint32_t> values;
-	keys.reserve(numKeys);
-	values.reserve(numKeys);
-	for(int iKey = 0; iKey < numKeys; iKey++){
-		keys.push_back(iKey);
-	}
+  // shuffle the keys
+  std::shuffle(keys.begin(), keys.end(), g);
 
-	//shuffle the keys
-	std::shuffle(keys.begin(), keys.end(), g);
-	
-	//assign the values
-	for(int iKey = 0; iKey < numKeys; iKey++){
-		values.push_back(keys[iKey]);
-	}
+  // assign the values
+  for (int iKey = 0; iKey < numKeys; iKey++) {
+    values.push_back(keys[iKey]);
+  }
 
-	//Move data to GPU
-	uint32_t *d_keys, *d_values;
-	CHECK_ERROR(memoryUtil::deviceAlloc(d_keys, numKeys));
-	CHECK_ERROR(memoryUtil::deviceAlloc(d_values, numKeys));
-	CHECK_ERROR(memoryUtil::cpyToDevice(keys.data(), d_keys, numKeys));
-	CHECK_ERROR(memoryUtil::cpyToDevice(values.data(), d_values, numKeys));
+  // Move data to GPU
+  uint32_t *d_keys, *d_values;
+  CHECK_ERROR(memoryUtil::deviceAlloc(d_keys, numKeys));
+  CHECK_ERROR(memoryUtil::deviceAlloc(d_values, numKeys));
+  CHECK_ERROR(memoryUtil::cpyToDevice(keys.data(), d_keys, numKeys));
+  CHECK_ERROR(memoryUtil::cpyToDevice(values.data(), d_values, numKeys));
 
-	//Build the tree
-	GpuTimer build_timer;
-	build_timer.timerStart();
-	btree.insertKeys(d_keys, d_values, numKeys, SourceT::DEVICE);
-	build_timer.timerStop();
+  // Build the tree
+  GpuTimer build_timer;
+  build_timer.timerStart();
+  btree.insertKeys(d_keys, d_values, numKeys, SourceT::DEVICE);
+  build_timer.timerStop();
 
+  ///////////////////////////////////
+  ///		 Query the tree       ///
+  ///////////////////////////////////
 
+  // Input number of queries
+  uint32_t numQueries = numKeys;
+  if (argc > 2)
+    numQueries = std::atoi(argv[2]);
+  // Prepare the query keys
+  std::vector<uint32_t> query_keys;
+  std::vector<uint32_t> query_results;
+  query_keys.reserve(numQueries * 2);
+  query_results.resize(numQueries);
+  for (int iKey = 0; iKey < numQueries * 2; iKey++) {
+    query_keys.push_back(iKey);
+  }
 
-	///////////////////////////////////
-	///		 Query the tree    		///
-	///////////////////////////////////
+  // shuffle the queries
+  std::shuffle(query_keys.begin(), query_keys.end(), g);
 
-	//Input number of queries
-	uint32_t numQueries = numKeys;
-	if(argc > 2)
-		numQueries = std::atoi(argv[2]);
-	//Prepare the query keys
-	std::vector<uint32_t> query_keys;
-	std::vector<uint32_t> query_results;
-	query_keys.reserve(numQueries * 2);
-	query_results.resize(numQueries);
-	for(int iKey = 0; iKey < numQueries * 2; iKey++){
-		query_keys.push_back(iKey);
-	}
+  // Move data to GPU
+  uint32_t *d_queries, *d_results;
+  CHECK_ERROR(memoryUtil::deviceAlloc(d_queries, numQueries));
+  CHECK_ERROR(memoryUtil::deviceAlloc(d_results, numQueries));
+  CHECK_ERROR(memoryUtil::cpyToDevice(query_keys.data(), d_queries, numQueries));
 
-	//shuffle the queries
-	std::shuffle(query_keys.begin(), query_keys.end(), g);
+  GpuTimer query_timer;
+  query_timer.timerStart();
+  btree.searchKeys(d_queries, d_results, numQueries, SourceT::DEVICE);
+  query_timer.timerStop();
 
+  // Copy results back
+  CHECK_ERROR(memoryUtil::cpyToHost(d_results, query_results.data(), numQueries));
 
-	//Move data to GPU
-	uint32_t *d_queries, *d_results;
-	CHECK_ERROR(memoryUtil::deviceAlloc(d_queries, numQueries));
-	CHECK_ERROR(memoryUtil::deviceAlloc(d_results, numQueries));
-	CHECK_ERROR(memoryUtil::cpyToDevice(query_keys.data(), d_queries, numQueries));
+  // Validate
+  uint32_t exist_count = 0;
+  for (int iKey = 0; iKey < numQueries; iKey++) {
+    if (query_keys[iKey] < numKeys) {
+      exist_count++;
+      if (query_results[iKey] != query_keys[iKey]) {
+        printf("Error validating queries (Key = %i, Value = %i) found (Value = %i)\n",
+               query_keys[iKey],
+               query_keys[iKey],
+               query_results[iKey]);
+        exit(0);
+      }
+    } else {
+      if (query_results[iKey] != 0) {
+        printf(
+            "Error validating queries (Key = %i, Value = NOT_FOUND) found (Value = %i)\n",
+            query_keys[iKey],
+            query_results[iKey]);
+        exit(0);
+      }
+    }
+  }
 
+  // output
+  printf("SUCCESS. ([%0.2f%%] queries exist in search.)\n",
+         float(exist_count) / float(numQueries) * 100.0);
 
-	GpuTimer query_timer;
-	query_timer.timerStart();
-	btree.searchKeys(d_queries, d_results, numQueries, SourceT::DEVICE);
-	query_timer.timerStop();
+  printf("Build: %i pairs in %f ms (%0.2f MKeys/sec)\n",
+         numKeys,
+         build_timer.getMsElapsed(),
+         float(numKeys) * 1e-6 / build_timer.getSElapsed());
 
+  printf("Query: %i pairs in %f ms (%0.2f MKeys/sec)\n",
+         numQueries,
+         query_timer.getMsElapsed(),
+         float(numQueries) * 1e-6 / query_timer.getSElapsed());
 
-	//Copy results back
-	CHECK_ERROR(memoryUtil::cpyToHost(d_results, query_results.data(), numQueries));
-
-
-	//Validate
-	uint32_t exist_count = 0;
-	for(int iKey = 0; iKey < numQueries; iKey++){
-		if(query_keys[iKey] < numKeys){
-			exist_count++;
-			if(query_results[iKey] != query_keys[iKey]){
-				printf("Error validating queries (Key = %i, Value = %i) found (Value = %i)\n", 
-					query_keys[iKey], query_keys[iKey], query_results[iKey]);
-				exit(0);
-			}
-		}
-		else{
-			if(query_results[iKey] != 0){
-				printf("Error validating queries (Key = %i, Value = NOT_FOUND) found (Value = %i)\n", 
-					query_keys[iKey], query_results[iKey]);
-				exit(0);
-			}
-		}
-	}
-
-	//output
-	printf("SUCCESS. ([%0.2f%%] queries exist in search.)\n",
-		float(exist_count) / float(numQueries) * 100.0);
-	
-	printf("Build: %i pairs in %f ms (%0.2f MKeys/sec)\n", 
-		numKeys, 
-		build_timer.getMsElapsed(), 
-		float(numKeys) * 1e-6 / build_timer.getSElapsed());
-
-	printf("Query: %i pairs in %f ms (%0.2f MKeys/sec)\n", 
-		numQueries, 
-		query_timer.getMsElapsed(), 
-		float(numQueries) * 1e-6 / query_timer.getSElapsed());
-
-	//cleanup
-	cudaFree(d_keys);
-	cudaFree(d_values);
-	cudaFree(d_queries);
-	cudaFree(d_results);
-	btree.free();
-	return 0;
+  // cleanup
+  cudaFree(d_keys);
+  cudaFree(d_values);
+  cudaFree(d_queries);
+  cudaFree(d_results);
+  btree.free();
+  return 0;
 }

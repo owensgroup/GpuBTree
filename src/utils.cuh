@@ -23,43 +23,39 @@
 /************************************************************************************/
 /************************************************************************************/
 
-
 #pragma once
-
 
 #include <iostream>
 
-
 //#define DEBUG
-namespace memoryUtil{
-	template <typename DataT, typename SizeT>
-	cudaError_t cpyToHost(DataT*& src_data, DataT* dst_data, SizeT count){
-		return cudaMemcpy(dst_data, src_data, sizeof(DataT) * count, cudaMemcpyDeviceToHost);
-	}
-
-	template <typename DataT, typename SizeT>
-	cudaError_t cpyToDevice(DataT* src_data, DataT*& dst_data, SizeT count){
-		return cudaMemcpy(dst_data, src_data, sizeof(DataT) * count, cudaMemcpyHostToDevice);
-	}
-
-	template <typename DataT, typename SizeT>
-	cudaError_t deviceAlloc(DataT*& src_data, SizeT count){
-		return cudaMalloc((void**)&src_data, sizeof(DataT) * count);
-	}
-
-	template <typename DataT, typename SizeT, typename ByteT>
-	cudaError_t deviceSet(DataT*& src_data, SizeT count, ByteT value){
-		return cudaMemset(src_data, value, sizeof(DataT) * count);
-	}
-
-	template <typename DataT>
-	cudaError_t deviceFree(DataT* src_data){
-		return cudaFree(src_data);
-	}
+namespace memoryUtil {
+template<typename DataT, typename SizeT>
+cudaError_t cpyToHost(DataT*& src_data, DataT* dst_data, SizeT count) {
+  return cudaMemcpy(dst_data, src_data, sizeof(DataT) * count, cudaMemcpyDeviceToHost);
 }
 
+template<typename DataT, typename SizeT>
+cudaError_t cpyToDevice(DataT* src_data, DataT*& dst_data, SizeT count) {
+  return cudaMemcpy(dst_data, src_data, sizeof(DataT) * count, cudaMemcpyHostToDevice);
+}
 
-#define CHECK_ERROR(call)  		                                                        \
+template<typename DataT, typename SizeT>
+cudaError_t deviceAlloc(DataT*& src_data, SizeT count) {
+  return cudaMalloc((void**)&src_data, sizeof(DataT) * count);
+}
+
+template<typename DataT, typename SizeT, typename ByteT>
+cudaError_t deviceSet(DataT*& src_data, SizeT count, ByteT value) {
+  return cudaMemset(src_data, value, sizeof(DataT) * count);
+}
+
+template<typename DataT>
+cudaError_t deviceFree(DataT* src_data) {
+  return cudaFree(src_data);
+}
+}  // namespace memoryUtil
+
+#define CHECK_ERROR(call)                                                               \
   do {                                                                                  \
     cudaError_t err = call;                                                             \
     if (err != cudaSuccess) {                                                           \
@@ -68,48 +64,36 @@ namespace memoryUtil{
     }                                                                                   \
   } while (0)
 
+#define LANEID_REVERSED(laneId) (31 - laneId)
 
-
-#define LANEID_REVERSED(laneId)  (31 - laneId)
-
-
-__device__ __forceinline__ unsigned lane_id()
-{
-	unsigned ret;
-	asm volatile ("mov.u32 %0, %laneid;" : "=r"(ret));
-	return ret;
+__device__ __forceinline__ unsigned lane_id() {
+  unsigned ret;
+  asm volatile("mov.u32 %0, %laneid;" : "=r"(ret));
+  return ret;
 }
 
+class GpuTimer {
+ public:
+  GpuTimer() {}
+  void timerStart() {
+    cudaEventCreate(&start);
+    cudaEventCreate(&stop);
+    cudaEventRecord(start, NULL);
+  }
+  void timerStop() {
+    cudaEventRecord(stop, NULL);
+    cudaEventSynchronize(stop);
+    cudaEventElapsedTime(&temp_time, start, stop);
 
-class GpuTimer
-{
-public:
-	GpuTimer(){
+    cudaEventDestroy(start);
+    cudaEventDestroy(stop);
+  }
+  float getMsElapsed() { return temp_time; }
 
-	}
-	void timerStart(){
-		cudaEventCreate(&start);
-		cudaEventCreate(&stop);
-		cudaEventRecord(start, NULL);
-	}
-	void timerStop(){
-		cudaEventRecord(stop, NULL);
-		cudaEventSynchronize(stop);
-		cudaEventElapsedTime(&temp_time, start, stop);
+  float getSElapsed() { return temp_time * 0.001f; }
+  ~GpuTimer(){};
 
-		cudaEventDestroy(start);
-		cudaEventDestroy(stop);
-	}
-	float getMsElapsed(){
-		return temp_time;
-	}
-
-	float getSElapsed(){
-		return temp_time * 0.001f;
-	}
-	~GpuTimer(){};
-
-private:
-	float temp_time = 0.0f;
-	cudaEvent_t start, stop;
+ private:
+  float temp_time = 0.0f;
+  cudaEvent_t start, stop;
 };
