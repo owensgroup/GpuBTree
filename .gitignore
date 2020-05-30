@@ -43,3 +43,5 @@
 **/CMakeScripts
 **/compile_commands.json
 **/bin/
+**/googletest-build/
+**/googletest-download/

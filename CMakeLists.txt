@@ -1,10 +1,15 @@
 cmake_minimum_required (VERSION 3.8 FATAL_ERROR)
 project (GpuBTree)
 
-find_package(CUDA 8.0 REQUIRED)
+find_package(CUDA 9.0 REQUIRED)
 
 option(CMAKE_VERBOSE_MAKEFILE ON)
-option(DGTEST,  "DGTEST"  ON)
+option(DGTEST "DGTEST"  ON)
+
+if (DGTEST)
+  include(${CMAKE_SOURCE_DIR}/cmake/FindGoogleTest.cmake)
+  message( ${CMAKE_SOURCE_DIR} )
+endif (DGTEST)
 
 set(CUDA_NVCC_FLAGS -std=c++11)
 set (CMAKE_CXX_STANDARD 11)
@@ -82,8 +87,9 @@ if(GPUBTREE_GENCODE_SM75)
   set(GENCODE ${GENCODE} ${GENCODE_SM75})
 endif(GPUBTREE_GENCODE_SM75)
 
-include_directories(src src/concurrent)
+include_directories(src)
 add_subdirectory(test)
+add_subdirectory(unittests)
 
 if (DGTEST)
   enable_testing()
