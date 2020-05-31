@@ -31,9 +31,9 @@
 
 namespace GpuBTree {
 
-template<typename SizeT,
-         typename KeyT,
+template<typename KeyT,
          typename ValueT,
+         typename SizeT = KeyT,
          typename AllocatorT = BoolAllocator>
 class GpuBTreeMap {
  private:
@@ -58,7 +58,10 @@ class GpuBTreeMap {
                          ValueT*& d_results,
                          SizeT& count,
                          cudaStream_t stream_id = 0);
-
+  cudaError_t compactTree(uint32_t*& root,
+                          KeyT*& d_tree,
+                          SizeT*& d_num_nodes,
+                          cudaStream_t stream_id = 0);
   bool _handle_memory;
 
  public:
@@ -142,6 +145,33 @@ class GpuBTreeMap {
       CHECK_ERROR(memoryUtil::cpyToHost(d_results, results, count));
       CHECK_ERROR(memoryUtil::deviceFree(d_queries));
       CHECK_ERROR(memoryUtil::deviceFree(d_results));
+    }
+
+    return cudaSuccess;
+  }
+
+  cudaError_t compactTree(KeyT*& btree,
+                          SizeT max_nodes,
+                          SizeT& num_nodes,
+                          SourceT source = SourceT::DEVICE) {
+    KeyT* d_tree;
+    KeyT* d_num_nodes;
+    if (source == SourceT::HOST) {
+      CHECK_ERROR(memoryUtil::deviceAlloc(d_tree, max_nodes * NODE_WIDTH));
+      CHECK_ERROR(memoryUtil::deviceAlloc(d_num_nodes, 1));
+    } else {
+      d_tree = btree;
+      d_num_nodes = &num_nodes;
+    }
+
+    CHECK_ERROR(compactTree(_d_root, d_tree, d_num_nodes));
+
+    if (source == SourceT::HOST) {
+      CHECK_ERROR(memoryUtil::cpyToHost(d_num_nodes, &num_nodes, 1));
+      CHECK_ERROR(memoryUtil::deviceFree(d_num_nodes));
+
+      CHECK_ERROR(memoryUtil::cpyToHost(d_tree, btree, num_nodes * NODE_WIDTH));
+      CHECK_ERROR(memoryUtil::deviceFree(d_tree));
     }
 
     return cudaSuccess;
