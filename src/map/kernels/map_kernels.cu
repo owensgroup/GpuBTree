@@ -98,5 +98,49 @@ __global__ void search_b_tree(uint32_t* d_root,
   d_results[tid] = myResult;
 }
 
+template<typename KeyT, typename SizeT, typename AllocatorT>
+__global__ void compact_tree(uint32_t* d_root,
+                             KeyT* d_tree,
+                             SizeT* d_num_nodes,
+                             AllocatorT allocator) {
+  uint32_t laneId = threadIdx.x & 0x1F;
+
+  uint32_t leftMostBranch = *d_root;
+
+  uint32_t nodesCount = 0;
+  bool isIntermediate = true;
+
+  while (isIntermediate) {
+    uint32_t laneData = *(allocator.getAddressPtr(leftMostBranch) + laneId);
+
+    isIntermediate = ((laneData & 0x80000000) != 0);
+    isIntermediate = __shfl_sync(WARP_MASK, isIntermediate, 0, WARP_WIDTH);
+    laneData &= 0x7FFFFFFF;
+
+    uint32_t writeData = laneData;
+    writeData = laneData;
+    writeData = isIntermediate ? (writeData | 0x80000000) : writeData;
+    d_tree[leftMostBranch * NODE_WIDTH + laneId] = writeData;
+    nodesCount++;
+
+    leftMostBranch = __shfl_sync(WARP_MASK, laneData, 1, WARP_WIDTH);
+    uint32_t nextInLevel = __shfl_sync(WARP_MASK, laneData, 31, WARP_WIDTH);
+
+    while (nextInLevel) {
+      laneData = *(allocator.getAddressPtr(nextInLevel) + laneId);
+      laneData &= 0x7FFFFFFF;
+
+      writeData = laneData;
+      writeData = isIntermediate ? (writeData | 0x80000000) : writeData;
+      d_tree[nextInLevel * NODE_WIDTH + laneId] = writeData;
+      nodesCount++;
+
+      nextInLevel = __shfl_sync(WARP_MASK, laneData, 31, WARP_WIDTH);
+    }
+  }
+
+  *d_num_nodes = nodesCount;
+}
+
 };  // namespace kernels
 };  // namespace GpuBTree

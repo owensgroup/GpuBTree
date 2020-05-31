@@ -31,18 +31,136 @@
 #include <algorithm>
 #include <random>
 #include <vector>
+#include <queue>
 
 #include "GpuBTree.h"
 
+template<typename key_t>
+void validate_tree_strucutre(key_t* h_tree, std::vector<key_t>& keys) {
+  // Traverse the tree:
+  const int PAIRS_PER_NODE = NODE_WIDTH >> 1;
+
+  uint32_t numNodes = 0;
+  uint32_t prevLevel = PAIRS_PER_NODE - 1;
+  uint32_t pairsCount = 0;
+  uint32_t pairsPerLevel = PAIRS_PER_NODE;
+  uint32_t curLevel = 0;
+  uint32_t levelNodes = 0;
+  uint32_t addedToLevel = 0;
+  uint32_t treeHeight = 0;
+  auto pivotToKey = [](key_t key) { return key & 0x7FFFFFFF; };
+  auto isValidEntry = [pivotToKey](key_t key) { return pivotToKey(key) != 0; };
+  auto isLeafNode = [](key_t key) { return (key & 0x80000000) == 0; };
+
+  std::vector<int> levelNodesId;
+  std::vector<std::vector<int>> levelsNodesId;
+  using value_t = key_t;
+  using tuple_t = std::pair<key_t, value_t>;
+  std::vector<tuple_t> tree_pairs;
+  std::queue<uint32_t> queue;
+  queue.push(0);
+  while (!queue.empty()) {
+    key_t* current = h_tree + queue.front() * NODE_WIDTH;
+    numNodes++;
+    levelNodesId.push_back(queue.front());
+    queue.pop();
+    key_t curKey = *current;
+    levelNodes++;
+    value_t curValue;
+    if (pivotToKey(curKey) == 1)  // first key is always 1
+      treeHeight++;
+    for (int iPair = 0; iPair < PAIRS_PER_NODE - 1; iPair++) {
+      bool leafNode = isLeafNode(*current);
+      if (isValidEntry(*current)) {
+        if (leafNode) {
+          curKey = *current;
+          curValue = *(current + 1);
+          if (curKey != 1)
+            tree_pairs.push_back(std::make_pair(curKey, curValue));
+
+          if (tree_pairs.size() == 0) {
+            // first pair must be {1,0}
+            ASSERT_EQ(curKey, 1);
+            ASSERT_EQ(curValue, 0);
+          }
+        } else {
+          curKey = pivotToKey(*current);
+          key_t o = pivotToKey(current[1]);
+          queue.push(o);
+          addedToLevel++;
+        }
+      }
+      pairsCount++;
+      current += 2;
+    }
+    if (pairsCount == prevLevel) {
+      pairsCount = 0;
+      pairsPerLevel *= PAIRS_PER_NODE;
+      curLevel++;
+      levelsNodesId.push_back(levelNodesId);
+      levelNodesId.clear();
+      levelNodes = 0;
+      prevLevel = addedToLevel * (PAIRS_PER_NODE - 1);
+      addedToLevel = 0;
+    }
+  }
+
+  ASSERT_EQ(tree_pairs.size(), keys.size());
+
+  // Validate the tree structure
+  for (uint32_t iLevel = 0; iLevel < levelsNodesId.size(); iLevel++) {
+    for (uint32_t iNode = 0; iNode < levelsNodesId[iLevel].size(); iNode++) {
+      uint32_t nodeIdx = levelsNodesId[iLevel][iNode];
+
+      key_t linkPtr = pivotToKey((h_tree + nodeIdx * NODE_WIDTH)[31]);
+      key_t linkMin = pivotToKey((h_tree + nodeIdx * NODE_WIDTH)[30]);
+
+      if (iNode == (levelsNodesId[iLevel].size() - 1))  // last node in level
+      {
+        // link should be zero at the last node in the level
+        ASSERT_EQ(linkPtr, 0);
+        ASSERT_EQ(linkMin, 0);
+      } else {
+        key_t correctPtr = levelsNodesId[iLevel][iNode + 1];
+        ASSERT_EQ(linkPtr, correctPtr);  // expected node idx from the tree next level
+        key_t* neighborNode = (h_tree + correctPtr * NODE_WIDTH);
+        key_t* curNode = (h_tree + nodeIdx * NODE_WIDTH);
+        for (int i = 0; i < PAIRS_PER_NODE; i++) {
+          uint32_t nextKey = pivotToKey(*neighborNode);
+          uint32_t curKey = pivotToKey(*curNode);
+          if (isValidEntry(nextKey)) {
+            ASSERT_GE(nextKey, linkMin);
+          }
+          if (i < (PAIRS_PER_NODE - 1) && isValidEntry(curKey)) {
+            ASSERT_LT(curKey, linkMin);
+          }
+          neighborNode += 2;
+          curNode += 2;
+        }
+      }
+    }
+  }
+
+  std::sort(keys.begin(), keys.end());  // sort keys
+  for (int iKey = 0; iKey < keys.size(); iKey++) {
+    key_t treeKey = tree_pairs[iKey].first - 2;
+    value_t treeVal = tree_pairs[iKey].second - 2;
+    ASSERT_EQ(keys[iKey], treeKey);
+    ASSERT_EQ(treeKey, treeVal);
+  }
+}
 TEST(BTreeMap, SimpleBuild) {
-  GpuBTree::GpuBTreeMap<uint32_t, uint32_t, uint32_t> btree;
+  using key_t = uint32_t;
+  using value_t = uint32_t;
+
+  GpuBTree::GpuBTreeMap<key_t, value_t> btree;
 
   // Input number of keys
-  uint32_t numKeys = 512;
+  size_t numKeys = 1 << 10;
 
   // Prepare the keys
-  std::vector<uint32_t> keys;
-  std::vector<uint32_t> values;
+  std::vector<key_t> keys;
+  std::vector<value_t> values;
   keys.reserve(numKeys);
   values.reserve(numKeys);
   for (int iKey = 0; iKey < numKeys; iKey++) {
@@ -60,7 +178,8 @@ TEST(BTreeMap, SimpleBuild) {
   }
 
   // Move data to GPU
-  uint32_t *d_keys, *d_values;
+  key_t* d_keys;
+  value_t* d_values;
   CHECK_ERROR(memoryUtil::deviceAlloc(d_keys, numKeys));
   CHECK_ERROR(memoryUtil::deviceAlloc(d_values, numKeys));
   CHECK_ERROR(memoryUtil::cpyToDevice(keys.data(), d_keys, numKeys));
@@ -72,14 +191,81 @@ TEST(BTreeMap, SimpleBuild) {
   btree.insertKeys(d_keys, d_values, numKeys, SourceT::DEVICE);
   timer.timerStop();
 
+  uint32_t max_nodes = 1 << 19;
+  key_t* h_tree = new uint32_t[max_nodes * NODE_WIDTH];
+  uint32_t num_nodes = 0;
+  btree.compactTree(h_tree, max_nodes, num_nodes, SourceT::HOST);
+
+  // Validation
+  validate_tree_strucutre(h_tree, keys);
   // cleanup
   cudaFree(d_keys);
   cudaFree(d_values);
+  delete[] h_tree;
+  btree.free();
+}
+
+TEST(BTreeMap, BuildSameKeys) {
+  using key_t = uint32_t;
+  using value_t = uint32_t;
+
+  GpuBTree::GpuBTreeMap<key_t, value_t> btree;
+
+  // Input number of keys
+  size_t numKeys = 1 << 10;
+
+  // Prepare the keys
+  std::vector<key_t> keys;
+  std::vector<key_t> unique_keys;
+  std::vector<value_t> values;
+  keys.reserve(numKeys);
+  values.reserve(numKeys);
+  for (int iKey = 0; iKey < numKeys / 2; iKey++) {
+    keys.push_back(iKey);
+    keys.push_back(iKey);
+    unique_keys.push_back(iKey);
+  }
+
+  // shuffle the keys
+  std::random_device rd;
+  std::mt19937 g(rd());
+  std::shuffle(keys.begin(), keys.end(), g);
+
+  // assign the values
+  for (int iKey = 0; iKey < numKeys; iKey++) {
+    values.push_back(keys[iKey]);
+  }
+
+  // Move data to GPU
+  key_t* d_keys;
+  value_t* d_values;
+  CHECK_ERROR(memoryUtil::deviceAlloc(d_keys, numKeys));
+  CHECK_ERROR(memoryUtil::deviceAlloc(d_values, numKeys));
+  CHECK_ERROR(memoryUtil::cpyToDevice(keys.data(), d_keys, numKeys));
+  CHECK_ERROR(memoryUtil::cpyToDevice(values.data(), d_values, numKeys));
+
+  // Build the tree
+  GpuTimer timer;
+  timer.timerStart();
+  btree.insertKeys(d_keys, d_values, numKeys, SourceT::DEVICE);
+  timer.timerStop();
+
+  uint32_t max_nodes = 1 << 19;
+  key_t* h_tree = new uint32_t[max_nodes * NODE_WIDTH];
+  uint32_t num_nodes = 0;
+  btree.compactTree(h_tree, max_nodes, num_nodes, SourceT::HOST);
+
+  // Validation
+  validate_tree_strucutre(h_tree, unique_keys);
+  // cleanup
+  cudaFree(d_keys);
+  cudaFree(d_values);
+  delete[] h_tree;
   btree.free();
 }
 
 TEST(BTreeMap, SearchRandomKeys) {
-  GpuBTree::GpuBTreeMap<uint32_t, uint32_t, uint32_t> btree;
+  GpuBTree::GpuBTreeMap<uint32_t, uint32_t> btree;
 
   // Input number of keys
   uint32_t numKeys = 512;

@@ -28,16 +28,16 @@
 #include <cstdint>
 
 namespace GpuBTree {
-template<typename SizeT, typename KeyT, typename ValueT, typename AllocatorT>
-cudaError_t GpuBTreeMap<SizeT, KeyT, ValueT, AllocatorT>::initBTree(
+template<typename KeyT, typename ValueT, typename SizeT, typename AllocatorT>
+cudaError_t GpuBTreeMap<KeyT, ValueT, SizeT, AllocatorT>::initBTree(
     uint32_t*& d_root,
     cudaStream_t stream_id) {
   kernels::init_btree<<<1, 32, 0, stream_id>>>(d_root, _mem_allocator);
   return cudaDeviceSynchronize();
 }
 
-template<typename SizeT, typename KeyT, typename ValueT, typename AllocatorT>
-cudaError_t GpuBTreeMap<SizeT, KeyT, ValueT, AllocatorT>::insertKeys(
+template<typename KeyT, typename ValueT, typename SizeT, typename AllocatorT>
+cudaError_t GpuBTreeMap<KeyT, ValueT, SizeT, AllocatorT>::insertKeys(
     uint32_t*& d_root,
     KeyT*& d_keys,
     ValueT*& d_values,
@@ -51,8 +51,8 @@ cudaError_t GpuBTreeMap<SizeT, KeyT, ValueT, AllocatorT>::insertKeys(
   return cudaSuccess;
 }
 
-template<typename SizeT, typename KeyT, typename ValueT, typename AllocatorT>
-cudaError_t GpuBTreeMap<SizeT, KeyT, ValueT, AllocatorT>::searchKeys(
+template<typename KeyT, typename ValueT, typename SizeT, typename AllocatorT>
+cudaError_t GpuBTreeMap<KeyT, ValueT, SizeT, AllocatorT>::searchKeys(
     uint32_t*& d_root,
     KeyT*& d_queries,
     ValueT*& d_results,
@@ -62,6 +62,21 @@ cudaError_t GpuBTreeMap<SizeT, KeyT, ValueT, AllocatorT>::searchKeys(
   const uint32_t shared_bytes = 0;
   kernels::search_b_tree<<<num_blocks, BLOCKSIZE_SEARCH_, shared_bytes, stream_id>>>(
       d_root, d_queries, d_results, count, _mem_allocator);
+
+  return cudaSuccess;
+}
+
+template<typename KeyT, typename ValueT, typename SizeT, typename AllocatorT>
+cudaError_t GpuBTreeMap<KeyT, ValueT, SizeT, AllocatorT>::compactTree(
+    uint32_t*& d_root,
+    KeyT*& d_tree,
+    SizeT*& d_num_nodes,
+    cudaStream_t stream_id) {
+  const uint32_t num_blocks = 1;
+  const uint32_t block_size = 32;
+  const uint32_t shared_bytes = 0;
+  kernels::compact_tree<<<num_blocks, block_size, shared_bytes, stream_id>>>(
+      d_root, d_tree, d_num_nodes, _mem_allocator);
 
   return cudaSuccess;
 }
