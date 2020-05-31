@@ -494,7 +494,10 @@ __device__ void insertion_unit(bool& to_be_inserted,
     if (FullLeafLinkRoot & 0x4) {
       uint32_t src_lane1 = __ffs(work_queue) - 1;
       uint32_t src_value = __shfl_sync(WARP_MASK, myValue, src_lane1, 32);
-      insert_into_node(false, next, src_key, src_value, memAlloc, src_unit_data);
+      bool key_exist =
+          __ballot_sync(WARP_MASK, src_key == src_unit_data) & KEY_PIVOT_MASK;
+      if (!key_exist)
+        insert_into_node(false, next, src_key, src_value, memAlloc, src_unit_data);
       release_lock(memAlloc->getAddressPtr(next));
       if (src_lane1 == lane_id())
         to_be_inserted = false;
