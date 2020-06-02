@@ -350,6 +350,226 @@ TEST(BTreeMap, SearchRandomKeys) {
   cudaFree(d_results);
   btree.free();
 }
+
+TEST(BTreeMap, DeleteRandomKeys) {
+  using key_t = uint32_t;
+  using value_t = uint32_t;
+
+  GpuBTree::GpuBTreeMap<key_t, value_t> btree;
+
+  // Input number of keys
+  size_t numKeys = 1 << 10;
+
+  // Prepare the keys
+  std::vector<key_t> keys;
+  std::vector<value_t> values;
+  keys.reserve(numKeys);
+  values.reserve(numKeys);
+  for (int iKey = 0; iKey < numKeys; iKey++) {
+    keys.push_back(iKey);
+  }
+
+  // shuffle the keys
+  std::random_device rd;
+  std::mt19937 g(rd());
+  std::shuffle(keys.begin(), keys.end(), g);
+
+  // assign the values
+  for (int iKey = 0; iKey < numKeys; iKey++) {
+    values.push_back(keys[iKey]);
+  }
+
+  // Move data to GPU
+  key_t* d_keys;
+  value_t* d_values;
+  CHECK_ERROR(memoryUtil::deviceAlloc(d_keys, numKeys));
+  CHECK_ERROR(memoryUtil::deviceAlloc(d_values, numKeys));
+  CHECK_ERROR(memoryUtil::cpyToDevice(keys.data(), d_keys, numKeys));
+  CHECK_ERROR(memoryUtil::cpyToDevice(values.data(), d_values, numKeys));
+
+  // Build the tree
+  GpuTimer timer;
+  timer.timerStart();
+  btree.insertKeys(d_keys, d_values, numKeys, SourceT::DEVICE);
+  timer.timerStop();
+
+  // Generate a batch of keys to delete
+  std::vector<key_t> keys_deleted;
+  uint32_t numDeletedKeys = 512;
+  keys_deleted.reserve(numDeletedKeys);
+  std::shuffle(keys.begin(), keys.end(), g);  // shuffle the keys again
+
+  // delete the last numDeletedKeys
+  int starting_idx = keys.size() - numDeletedKeys;
+  for (int iKey = starting_idx; iKey < keys.size(); iKey++) {
+    keys_deleted.push_back(keys[iKey]);
+  }
+
+  // Move data to GPU
+  key_t* d_keys_deleted;
+  CHECK_ERROR(memoryUtil::deviceAlloc(d_keys_deleted, numDeletedKeys));
+  CHECK_ERROR(
+      memoryUtil::cpyToDevice(keys_deleted.data(), d_keys_deleted, numDeletedKeys));
+
+  // Apply the deleteion batch to the btree
+  btree.deleteKeys(d_keys_deleted, numDeletedKeys, SourceT::DEVICE);
+
+  // Now we can apply deleteion by resizeing the vector
+  keys.resize(starting_idx);
+
+  uint32_t max_nodes = 1 << 19;
+  key_t* h_tree = new uint32_t[max_nodes * NODE_WIDTH];
+  uint32_t num_nodes = 0;
+  btree.compactTree(h_tree, max_nodes, num_nodes, SourceT::HOST);
+
+  // Validation
+  validate_tree_strucutre(h_tree, keys);
+  // cleanup
+  cudaFree(d_keys_deleted);
+  cudaFree(d_keys);
+  cudaFree(d_values);
+  delete[] h_tree;
+  btree.free();
+}
+
+TEST(BTreeMap, DeleteAllKeys) {
+  using key_t = uint32_t;
+  using value_t = uint32_t;
+
+  GpuBTree::GpuBTreeMap<key_t, value_t> btree;
+
+  // Input number of keys
+  size_t numKeys = 1 << 10;
+
+  // Prepare the keys
+  std::vector<key_t> keys;
+  std::vector<value_t> values;
+  keys.reserve(numKeys);
+  values.reserve(numKeys);
+  for (int iKey = 0; iKey < numKeys; iKey++) {
+    keys.push_back(iKey);
+  }
+
+  // shuffle the keys
+  std::random_device rd;
+  std::mt19937 g(rd());
+  std::shuffle(keys.begin(), keys.end(), g);
+
+  // assign the values
+  for (int iKey = 0; iKey < numKeys; iKey++) {
+    values.push_back(keys[iKey]);
+  }
+
+  // Move data to GPU
+  key_t* d_keys;
+  value_t* d_values;
+  CHECK_ERROR(memoryUtil::deviceAlloc(d_keys, numKeys));
+  CHECK_ERROR(memoryUtil::deviceAlloc(d_values, numKeys));
+  CHECK_ERROR(memoryUtil::cpyToDevice(keys.data(), d_keys, numKeys));
+  CHECK_ERROR(memoryUtil::cpyToDevice(values.data(), d_values, numKeys));
+
+  // Build the tree
+  GpuTimer timer;
+  timer.timerStart();
+  btree.insertKeys(d_keys, d_values, numKeys, SourceT::DEVICE);
+  timer.timerStop();
+
+  // Generate a batch of keys to delete which is all keys
+  std::shuffle(keys.begin(), keys.end(), g);
+
+  // Apply the deleteion batch to the btree
+  btree.deleteKeys(d_keys, numKeys, SourceT::DEVICE);
+
+  uint32_t max_nodes = 1 << 19;
+  key_t* h_tree = new uint32_t[max_nodes * NODE_WIDTH];
+  uint32_t num_nodes = 0;
+  btree.compactTree(h_tree, max_nodes, num_nodes, SourceT::HOST);
+
+  // Validation
+  keys.clear();  // Deleting all keys
+  validate_tree_strucutre(h_tree, keys);
+  // cleanup
+  cudaFree(d_keys);
+  cudaFree(d_values);
+  delete[] h_tree;
+  btree.free();
+}
+
+TEST(BTreeMap, DeleteNoKeys) {
+  using key_t = uint32_t;
+  using value_t = uint32_t;
+
+  GpuBTree::GpuBTreeMap<key_t, value_t> btree;
+
+  // Input number of keys
+  size_t numKeys = 1 << 10;
+
+  // Prepare the keys
+  std::vector<key_t> keys;
+  std::vector<value_t> values;
+  keys.reserve(numKeys);
+  values.reserve(numKeys);
+  for (int iKey = 0; iKey < numKeys; iKey++) {
+    keys.push_back(iKey);
+  }
+
+  // shuffle the keys
+  std::random_device rd;
+  std::mt19937 g(rd());
+  std::shuffle(keys.begin(), keys.end(), g);
+
+  // assign the values
+  for (int iKey = 0; iKey < numKeys; iKey++) {
+    values.push_back(keys[iKey]);
+  }
+
+  // Move data to GPU
+  key_t* d_keys;
+  value_t* d_values;
+  CHECK_ERROR(memoryUtil::deviceAlloc(d_keys, numKeys));
+  CHECK_ERROR(memoryUtil::deviceAlloc(d_values, numKeys));
+  CHECK_ERROR(memoryUtil::cpyToDevice(keys.data(), d_keys, numKeys));
+  CHECK_ERROR(memoryUtil::cpyToDevice(values.data(), d_values, numKeys));
+
+  // Build the tree
+  GpuTimer timer;
+  timer.timerStart();
+  btree.insertKeys(d_keys, d_values, numKeys, SourceT::DEVICE);
+  timer.timerStop();
+
+  // Generate a batch of keys to delete
+  std::vector<key_t> keys_deleted;
+  uint32_t numDeletedKeys = 512;
+  keys_deleted.reserve(numDeletedKeys);
+
+  for (int iKey = 0; iKey < numDeletedKeys; iKey++) {
+    keys_deleted.push_back(numKeys + iKey);
+  }
+  std::shuffle(keys_deleted.begin(), keys_deleted.end(), g);
+
+  // Move data to GPU
+  key_t* d_keys_deleted;
+  CHECK_ERROR(memoryUtil::deviceAlloc(d_keys_deleted, numDeletedKeys));
+  CHECK_ERROR(
+      memoryUtil::cpyToDevice(keys_deleted.data(), d_keys_deleted, numDeletedKeys));
+
+  // Apply the deleteion batch to the btree
+  btree.deleteKeys(d_keys_deleted, numDeletedKeys, SourceT::DEVICE);
+
+  uint32_t max_nodes = 1 << 19;
+  key_t* h_tree = new uint32_t[max_nodes * NODE_WIDTH];
+  uint32_t num_nodes = 0;
+  btree.compactTree(h_tree, max_nodes, num_nodes, SourceT::HOST);
+
+  // Validation
+  validate_tree_strucutre(h_tree, keys);
+  // cleanup
+  cudaFree(d_keys_deleted);
+  cudaFree(d_keys);
+  cudaFree(d_values);
+  delete[] h_tree;
+  btree.free();
+}
 int main(int argc, char** argv) {
   ::testing::InitGoogleTest(&argc, argv);
   return RUN_ALL_TESTS();

@@ -80,4 +80,18 @@ cudaError_t GpuBTreeMap<KeyT, ValueT, SizeT, AllocatorT>::compactTree(
 
   return cudaSuccess;
 }
-}  // namespace GpuBTree
+
+template<typename KeyT, typename ValueT, typename SizeT, typename AllocatorT>
+cudaError_t GpuBTreeMap<KeyT, ValueT, SizeT, AllocatorT>::deleteKeys(
+    uint32_t*& d_root,
+    KeyT*& d_queries,
+    SizeT& count,
+    cudaStream_t stream_id) {
+  const uint32_t num_blocks = (count + BLOCKSIZE_SEARCH_ - 1) / BLOCKSIZE_SEARCH_;
+  const uint32_t shared_bytes = 0;
+  kernels::delete_b_tree<<<num_blocks, BLOCKSIZE_SEARCH_, shared_bytes, stream_id>>>(
+      d_root, d_queries, count, _mem_allocator);
+
+  return cudaSuccess;
+}
+};  // namespace GpuBTree

@@ -62,6 +62,10 @@ class GpuBTreeMap {
                           KeyT*& d_tree,
                           SizeT*& d_num_nodes,
                           cudaStream_t stream_id = 0);
+  cudaError_t deleteKeys(uint32_t*& root,
+                         KeyT*& d_queries,
+                         SizeT& count,
+                         cudaStream_t stream_id = 0);
   bool _handle_memory;
 
  public:
@@ -176,6 +180,22 @@ class GpuBTreeMap {
 
     return cudaSuccess;
   }
-  cudaError_t deleteKeys(KeyT* keys, SizeT count, SourceT source = SourceT::DEVICE) {}
+  cudaError_t deleteKeys(KeyT* queries, SizeT count, SourceT source = SourceT::DEVICE) {
+    KeyT* d_queries;
+    if (source == SourceT::HOST) {
+      CHECK_ERROR(memoryUtil::deviceAlloc(d_queries, count));
+      CHECK_ERROR(memoryUtil::cpyToDevice(queries, d_queries, count));
+    } else {
+      d_queries = queries;
+    }
+
+    CHECK_ERROR(deleteKeys(_d_root, d_queries, count));
+
+    if (source == SourceT::HOST) {
+      CHECK_ERROR(memoryUtil::deviceFree(d_queries));
+    }
+
+    return cudaSuccess;
+  }
 };
 };  // namespace GpuBTree
