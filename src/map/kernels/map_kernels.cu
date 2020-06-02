@@ -142,5 +142,24 @@ __global__ void compact_tree(uint32_t* d_root,
   *d_num_nodes = nodesCount;
 }
 
+template<typename KeyT, typename SizeT, typename AllocatorT>
+__global__ void delete_b_tree(uint32_t* d_root,
+                              KeyT* d_queries,
+                              SizeT num_queries,
+                              AllocatorT allocator) {
+  uint32_t tid = threadIdx.x + blockIdx.x * blockDim.x;
+  uint32_t laneId = threadIdx.x & 0x1F;
+  if ((tid - laneId) >= num_queries)
+    return;
+
+  KeyT myQuery = 0xFFFFFFFF;
+
+  if (tid < uint32_t(num_queries)) {
+    myQuery = d_queries[tid] + 2;
+  }
+
+  warps::delete_unit_bulk(laneId, myQuery, d_root, &allocator);
+}
+
 };  // namespace kernels
 };  // namespace GpuBTree

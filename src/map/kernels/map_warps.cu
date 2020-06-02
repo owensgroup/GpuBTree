@@ -52,23 +52,15 @@ __forceinline__ __device__ uint32_t volatileNodeReadR(uint32_t* nodeAddress) {
   return volatileRead(nodeAddress + LANEID_REVERSED(lane_id()));
 }
 
+__forceinline__ __device__ uint32_t volatileNodeRead(uint32_t* nodeAddress) {
+  return volatileRead(nodeAddress + lane_id());
+}
+
 __forceinline__ __device__ void volatileNodeWriteR(uint32_t* nodeAddress, uint32_t data) {
-#if __CUDA_ARCH__ >= 700
-  asm volatile("st.global.relaxed.sys.u32 [%0], %1;" ::"l"(nodeAddress +
-                                                           LANEID_REVERSED(lane_id())),
-               "r"(data));
-#else
-  *nodeAddress = data;
-#endif
+  volatileWrite(nodeAddress + LANEID_REVERSED(lane_id()), data);
 }
 __forceinline__ __device__ void volatileNodeWrite(uint32_t* nodeAddress, uint32_t data) {
-#if __CUDA_ARCH__ >= 700
-  asm volatile("st.global.relaxed.sys.u32 [%0], %1;" ::"l"(nodeAddress +
-                                                           LANEID_REVERSED(lane_id())),
-               "r"(data));
-#else
-  *nodeAddress = data;
-#endif
+  volatileWrite(nodeAddress + lane_id(), data);
 }
 
 __device__ bool try_acquire_lock(uint32_t* nodeAddress) {
@@ -687,6 +679,54 @@ __device__ uint32_t lower_bound_unit_bulk(uint32_t& laneId,
   } while (isIntermediate);
 
   return found_in_node;
+}
+
+template<typename KeyT, typename AllocatorT>
+__device__ void delete_unit_bulk(uint32_t& laneId,
+                                 KeyT& myKey,
+                                 uint32_t*& d_root,
+                                 AllocatorT* memAlloc) {
+  int dest_lane_pivot;
+  uint32_t rootAddress = *d_root;
+
+#pragma unroll
+  for (int src_lane = 0; src_lane < WARP_WIDTH; src_lane++) {
+    KeyT src_key = __shfl_sync(WARP_MASK, myKey, src_lane, 32);
+    KeyT next = rootAddress;
+    bool isIntermediate = true;
+    do {
+      KeyT src_unit_data = *(memAlloc->getAddressPtr(next) + laneId);
+      isIntermediate = !((src_unit_data & 0x80000000) == 0);  // only even lanes are valid
+      isIntermediate = __shfl_sync(WARP_MASK, isIntermediate, 0, 32);
+      if (!isIntermediate) {
+        acquire_lock(memAlloc->getAddressPtr(next));
+        src_unit_data = volatileNodeRead(memAlloc->getAddressPtr(next));
+      }
+      KeyT src_unit_key = src_unit_data & 0x7FFFFFFF;
+      bool hit = (src_key >= src_unit_key) && src_unit_key;
+      bool key_exist =
+          __ballot_sync(WARP_MASK, src_key == src_unit_key) & KEY_PIVOT_MASK_R;
+      uint32_t isFoundPivot_bmp = __ballot_sync(WARP_MASK, hit);
+      dest_lane_pivot = __ffs(~isFoundPivot_bmp & KEY_PIVOT_MASK_R);
+      if (isIntermediate) {
+        dest_lane_pivot = dest_lane_pivot ? dest_lane_pivot - 2 : 29;
+        next = __shfl_sync(WARP_MASK, src_unit_data, dest_lane_pivot, 32);
+      } else {
+        if (key_exist) {
+          uint32_t newNodeData = __shfl_down_sync(WARP_MASK, src_unit_key, 2, 32);
+          isFoundPivot_bmp &= KEY_PIVOT_MASK_R;
+          isFoundPivot_bmp |= (isFoundPivot_bmp << 1);  // mark values
+          isFoundPivot_bmp >>= 2;                       // remove mask for src_key
+          bool to_move = ((1 << laneId) & ~isFoundPivot_bmp) && (laneId < 30);
+          KeyT finalData = (to_move * newNodeData + (!to_move) * src_unit_key);
+          finalData = (laneId >= 28 && laneId < 30) ? 0 : finalData;
+          finalData = (laneId == 1) ? finalData | 0x80000000 : finalData;
+          volatileNodeWrite(memAlloc->getAddressPtr(next), finalData);
+        }
+        release_lock(memAlloc->getAddressPtr(next));
+      }
+    } while (isIntermediate);
+  }
 }
 }  // namespace warps
 }  // namespace GpuBTree
