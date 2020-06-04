@@ -2,7 +2,7 @@
 A GPU B-Tree optimized for updates.
 
 ## Publication
-Muhammad A. Awad, Saman Ashkiani, Rob Johnson, Martín Farach-Colton, and John D. Owens. **Engineering a High-Performance GPU B-Tree**, In *Proceedings of the 24th ACM SIGPLAN Symposium on Principles and Practice of Parallel Programming,* PPoPP 2019, pages 145–157, February 2019. [[Link]](https://ieeexplore.ieee.org/abstract/document/8425196)
+Muhammad A. Awad, Saman Ashkiani, Rob Johnson, Martín Farach-Colton, and John D. Owens. **Engineering a High-Performance GPU B-Tree**, In *Proceedings of the 24th ACM SIGPLAN Symposium on Principles and Practice of Parallel Programming,* PPoPP 2019, pages 145–157, February 2019. [[Link]](https://escholarship.org/content/qt1ph2x5td/qt1ph2x5td.pdf?t=pkuy5m)
 
 ## Cloning and Building
 1. Clone: `git clone https://github.com/owensgroup/GpuBTree.git`
