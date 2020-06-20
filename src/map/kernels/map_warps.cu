@@ -728,5 +728,79 @@ __device__ void delete_unit_bulk(uint32_t& laneId,
     } while (isIntermediate);
   }
 }
+template<typename AllocatorT>
+__forceinline__ __device__ void traverse_side_links(uint32_t& src_unit_data,
+                                                    uint32_t& src_key,
+                                                    uint32_t& next,
+                                                    AllocatorT*& memAlloc) {
+  uint32_t link_min =
+      __shfl_sync(WARP_MASK, src_unit_data, 1, 32) & 0x7FFFFFFF;  // get link min
+  while (link_min && src_key >= link_min) {
+    next = __shfl_sync(WARP_MASK, src_unit_data, 0, 32) & 0x7FFFFFFF;  // get link min
+    src_unit_data = volatileNodeReadR(memAlloc->getAddressPtr(next));
+    link_min = __shfl_sync(WARP_MASK, src_unit_data, 1, 32) & 0x7FFFFFFF;  // get link min
+  }
+}
+template<typename AllocatorT>
+__device__ void concurrent_search_unit(bool& to_be_searched,
+                                       uint32_t& laneId,
+                                       uint32_t& myKey,
+                                       uint32_t& myResult,
+                                       uint32_t*& d_root,
+                                       AllocatorT* memAlloc) {
+  uint32_t rootAddress = *d_root;
+
+  uint32_t work_queue = 0;
+  uint32_t last_work_queue = 0;
+  uint32_t next = rootAddress;  // starts from the root
+
+  while ((work_queue = __ballot_sync(WARP_MASK, to_be_searched))) {
+    uint32_t src_lane = __ffs(work_queue) - 1;
+    uint32_t src_key = __shfl_sync(WARP_MASK, myKey, src_lane, 32);
+
+    bool found = false;
+    next = (last_work_queue != work_queue) ? rootAddress : next;
+
+    uint32_t src_unit_data = volatileNodeReadR(memAlloc->getAddressPtr(next));
+
+    // here we always need to perform sidelinks checks
+    traverse_side_links(src_unit_data, src_key, next, memAlloc);
+
+    bool isLeaf = ((src_unit_data & 0x80000000) == 0);
+    isLeaf = __shfl_sync(WARP_MASK, isLeaf, 31, 32);
+
+    src_unit_data = src_unit_data ? src_unit_data : 0xFFFFFFFF;
+    uint32_t src_unit_key = src_unit_data & 0x7FFFFFFF;
+
+    // looking for the right pivot, only valid at intermediate nodes
+    uint32_t isFoundPivot_bmp =
+        __ballot_sync(WARP_MASK, src_key >= src_unit_key) & KEY_PIVOT_MASK;
+    int dest_lane_pivot = __ffs(isFoundPivot_bmp) - 1;
+
+    if (dest_lane_pivot < 0) {  // not found in an intermediate node
+      if (laneId == src_lane) {
+        myResult = SEARCH_NOT_FOUND;
+        to_be_searched = false;
+      }
+    } else {
+      // either we are at a leaf node and have found a match
+      // or, we are at an intermediate node and should go the next level
+      next = __shfl_sync(WARP_MASK, src_unit_data, dest_lane_pivot - 1, 32);
+      found = (isLeaf && src_unit_data == src_key);
+      found = __shfl_sync(WARP_MASK, found, dest_lane_pivot, 32);
+
+      if (found && (laneId == src_lane)) {  // leaf and found
+        myResult = next;
+        to_be_searched = false;
+      }
+
+      if (isLeaf && !found && (laneId == src_lane)) {  // leaf and not found
+        myResult = SEARCH_NOT_FOUND;
+        to_be_searched = false;
+      }
+    }
+    last_work_queue = work_queue;
+  }
+}
 }  // namespace warps
 }  // namespace GpuBTree

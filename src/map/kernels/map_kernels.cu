@@ -194,6 +194,12 @@ __global__ void concurrent_ops_b_tree(uint32_t* d_root,
   }
 
   warps::insertion_unit(to_insert, myKey, myValue, d_root, &allocator);
+  warps::concurrent_search_unit(to_query, laneId, myKey, myValue, d_root, &allocator);
+
+  if (to_query) {
+    myValue = myValue ? myValue - 2 : myValue;
+    d_values[tid] = myValue;
+  }
 }
 };  // namespace kernels
 };  // namespace GpuBTree

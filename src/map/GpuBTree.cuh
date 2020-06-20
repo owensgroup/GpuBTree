@@ -227,6 +227,7 @@ class GpuBTreeMap {
     CHECK_ERROR(concurrentOperations(_d_root, d_keys, d_values, d_ops, count));
 
     if (source == SourceT::HOST) {
+      CHECK_ERROR(memoryUtil::cpyToHost(d_values, values, count));
       CHECK_ERROR(memoryUtil::deviceFree(d_keys));
       CHECK_ERROR(memoryUtil::deviceFree(d_values));
       CHECK_ERROR(memoryUtil::deviceFree(d_ops));

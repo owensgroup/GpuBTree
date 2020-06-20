@@ -627,10 +627,9 @@ TEST(BTreeMap, ConcurrentOpsInsertOnly) {
                              insertionBatchSize,
                              SourceT::HOST);
 
-  // now validate again
+  // Validation again
   numNodes = 0;
   btree.compactTree(h_tree, maxNodes, numNodes, SourceT::HOST);
-  // Validation again
   validate_tree_strucutre(h_tree, keys, initialNumKeys + insertionBatchSize);
 
   // cleanup
@@ -638,6 +637,169 @@ TEST(BTreeMap, ConcurrentOpsInsertOnly) {
   btree.free();
 }
 
+TEST(BTreeMap, ConcurrentOpsInsertNewQueryPast) {
+  using key_t = uint32_t;
+  using value_t = uint32_t;
+
+  GpuBTree::GpuBTreeMap<key_t, value_t> btree;
+
+  // Input number of keys
+  size_t initialNumKeys = 1 << 10;
+  size_t maxKeys = 1 << 20;
+
+  // Prepare the keys
+  std::vector<key_t> keys;
+  std::vector<value_t> values;
+  keys.reserve(maxKeys);
+  values.reserve(maxKeys);
+  for (int iKey = 0; iKey < maxKeys; iKey++) {
+    keys.push_back(iKey);
+  }
+
+  // shuffle the keys
+  std::random_device rd;
+  std::mt19937 g(rd());
+  std::shuffle(keys.begin(), keys.end(), g);
+
+  // assign the values
+  for (int iKey = 0; iKey < maxKeys; iKey++) {
+    values.push_back(keys[iKey]);
+  }
+
+  // Build the tree
+  btree.insertKeys(keys.data(), values.data(), initialNumKeys, SourceT::HOST);
+
+  uint32_t maxNodes = 1 << 19;
+  key_t* h_tree = new uint32_t[maxNodes * NODE_WIDTH];
+  uint32_t numNodes = 0;
+  btree.compactTree(h_tree, maxNodes, numNodes, SourceT::HOST);
+
+  // Validation
+  validate_tree_strucutre(h_tree, keys, initialNumKeys);
+
+  // Now perform concurrent key insertion
+  // Initialize the batch
+  size_t insertionBatchSize = 1 << 10;
+  size_t queryBatchSize = initialNumKeys;
+  size_t totalBatchSize = insertionBatchSize + queryBatchSize;
+
+  assert(totalBatchSize <= maxKeys);
+  std::vector<OperationT> ops;
+  ops.reserve(totalBatchSize);
+  for (size_t op = 0; op < totalBatchSize; op++) {
+    if (op < queryBatchSize) {
+      ops[op] = OperationT::QUERY;
+    } else {
+      ops[op] = OperationT::INSERT;
+    }
+  }
+
+  // Perform the operations
+  btree.concurrentOperations(
+      keys.data(), values.data(), ops.data(), totalBatchSize, SourceT::HOST);
+
+  // Validate again
+  numNodes = 0;
+  btree.compactTree(h_tree, maxNodes, numNodes, SourceT::HOST);
+  validate_tree_strucutre(h_tree, keys, initialNumKeys + insertionBatchSize);
+
+  // Validate the query
+  for (int iKey = 0; iKey < queryBatchSize; iKey++) {
+    EXPECT_EQ(values[iKey], keys[iKey]);
+  }
+
+  // cleanup
+  delete[] h_tree;
+  btree.free();
+}
+
+TEST(BTreeMap, ConcurrentOpsInsertNewQueryPastShuffled) {
+  using key_t = uint32_t;
+  using value_t = uint32_t;
+
+  GpuBTree::GpuBTreeMap<key_t, value_t> btree;
+
+  // Input number of keys
+  size_t initialNumKeys = 1 << 10;
+  size_t maxKeys = 1 << 20;
+
+  // Prepare the keys
+  std::vector<key_t> keys;
+  std::vector<value_t> values;
+  keys.reserve(maxKeys);
+  values.reserve(maxKeys);
+  for (int iKey = 0; iKey < maxKeys; iKey++) {
+    keys.push_back(iKey);
+  }
+
+  // shuffle the keys
+  std::random_device rd;
+  std::mt19937 g(rd());
+  std::shuffle(keys.begin(), keys.end(), g);
+
+  // assign the values
+  for (int iKey = 0; iKey < maxKeys; iKey++) {
+    values.push_back(keys[iKey]);
+  }
+
+  // Build the tree
+  btree.insertKeys(keys.data(), values.data(), initialNumKeys, SourceT::HOST);
+
+  uint32_t maxNodes = 1 << 19;
+  key_t* h_tree = new uint32_t[maxNodes * NODE_WIDTH];
+  uint32_t numNodes = 0;
+  btree.compactTree(h_tree, maxNodes, numNodes, SourceT::HOST);
+
+  // Validation
+  validate_tree_strucutre(h_tree, keys, initialNumKeys);
+
+  // Now perform concurrent key insertion
+  // Initialize the batch
+  size_t insertionBatchSize = 1 << 10;
+  size_t queryBatchSize = initialNumKeys;
+  size_t totalBatchSize = insertionBatchSize + queryBatchSize;
+
+  assert(totalBatchSize <= maxKeys);
+  std::vector<OperationT> ops;
+  ops.reserve(totalBatchSize);
+  for (size_t op = 0; op < totalBatchSize; op++) {
+    if (op < queryBatchSize) {
+      ops[op] = OperationT::QUERY;
+    } else {
+      ops[op] = OperationT::INSERT;
+    }
+  }
+
+  // shuffle all arrays
+  // http://www.cplusplus.com/reference/algorithm/shuffle/
+  for (auto i = (keys.begin() - keys.end()) - 1; i > 0; --i) {
+    std::uniform_int_distribution<decltype(i)> d(0, i);
+    auto randomizer = d(g);
+    std::swap(keys[i], keys[randomizer]);
+    std::swap(values[i], values[randomizer]);
+    std::swap(ops[i], ops[randomizer]);
+  }
+
+  // Perform the operations
+  btree.concurrentOperations(
+      keys.data(), values.data(), ops.data(), totalBatchSize, SourceT::HOST);
+
+  // Validate again
+  numNodes = 0;
+  btree.compactTree(h_tree, maxNodes, numNodes, SourceT::HOST);
+  validate_tree_strucutre(h_tree, keys, totalBatchSize);
+
+  // Validate the query
+  for (int iKey = 0; iKey < totalBatchSize; iKey++) {
+    if (ops[iKey] == OperationT::QUERY) {
+      EXPECT_EQ(values[iKey], keys[iKey]);
+    }
+  }
+
+  // cleanup
+  delete[] h_tree;
+  btree.free();
+}
 int main(int argc, char** argv) {
   ::testing::InitGoogleTest(&argc, argv);
   return RUN_ALL_TESTS();
