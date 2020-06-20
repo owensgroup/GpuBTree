@@ -36,7 +36,10 @@
 #include "GpuBTree.h"
 
 template<typename key_t>
-void validate_tree_strucutre(key_t* h_tree, std::vector<key_t>& keys) {
+void validate_tree_strucutre(key_t* h_tree, std::vector<key_t> keys, size_t num_keys) {
+  // resize to match the requested size
+  keys.resize(num_keys);
+
   // Traverse the tree:
   const int PAIRS_PER_NODE = NODE_WIDTH >> 1;
 
@@ -197,7 +200,7 @@ TEST(BTreeMap, SimpleBuild) {
   btree.compactTree(h_tree, max_nodes, num_nodes, SourceT::HOST);
 
   // Validation
-  validate_tree_strucutre(h_tree, keys);
+  validate_tree_strucutre(h_tree, keys, keys.size());
   // cleanup
   cudaFree(d_keys);
   cudaFree(d_values);
@@ -256,7 +259,7 @@ TEST(BTreeMap, BuildSameKeys) {
   btree.compactTree(h_tree, max_nodes, num_nodes, SourceT::HOST);
 
   // Validation
-  validate_tree_strucutre(h_tree, unique_keys);
+  validate_tree_strucutre(h_tree, unique_keys, unique_keys.size());
   // cleanup
   cudaFree(d_keys);
   cudaFree(d_values);
@@ -423,7 +426,7 @@ TEST(BTreeMap, DeleteRandomKeys) {
   btree.compactTree(h_tree, max_nodes, num_nodes, SourceT::HOST);
 
   // Validation
-  validate_tree_strucutre(h_tree, keys);
+  validate_tree_strucutre(h_tree, keys, keys.size());
   // cleanup
   cudaFree(d_keys_deleted);
   cudaFree(d_keys);
@@ -487,7 +490,7 @@ TEST(BTreeMap, DeleteAllKeys) {
 
   // Validation
   keys.clear();  // Deleting all keys
-  validate_tree_strucutre(h_tree, keys);
+  validate_tree_strucutre(h_tree, keys, keys.size());
   // cleanup
   cudaFree(d_keys);
   cudaFree(d_values);
@@ -562,7 +565,7 @@ TEST(BTreeMap, DeleteNoKeys) {
   btree.compactTree(h_tree, max_nodes, num_nodes, SourceT::HOST);
 
   // Validation
-  validate_tree_strucutre(h_tree, keys);
+  validate_tree_strucutre(h_tree, keys, keys.size());
   // cleanup
   cudaFree(d_keys_deleted);
   cudaFree(d_keys);
@@ -570,6 +573,71 @@ TEST(BTreeMap, DeleteNoKeys) {
   delete[] h_tree;
   btree.free();
 }
+
+TEST(BTreeMap, ConcurrentOpsInsertOnly) {
+  using key_t = uint32_t;
+  using value_t = uint32_t;
+
+  GpuBTree::GpuBTreeMap<key_t, value_t> btree;
+
+  // Input number of keys
+  size_t initialNumKeys = 1 << 10;
+  size_t maxKeys = 1 << 20;
+
+  // Prepare the keys
+  std::vector<key_t> keys;
+  std::vector<value_t> values;
+  keys.reserve(maxKeys);
+  values.reserve(maxKeys);
+  for (int iKey = 0; iKey < maxKeys; iKey++) {
+    keys.push_back(iKey);
+  }
+
+  // shuffle the keys
+  std::random_device rd;
+  std::mt19937 g(rd());
+  std::shuffle(keys.begin(), keys.end(), g);
+
+  // assign the values
+  for (int iKey = 0; iKey < maxKeys; iKey++) {
+    values.push_back(keys[iKey]);
+  }
+
+  // Build the tree
+  btree.insertKeys(keys.data(), values.data(), initialNumKeys, SourceT::HOST);
+
+  uint32_t maxNodes = 1 << 19;
+  key_t* h_tree = new uint32_t[maxNodes * NODE_WIDTH];
+  uint32_t numNodes = 0;
+  btree.compactTree(h_tree, maxNodes, numNodes, SourceT::HOST);
+
+  // Validation
+  validate_tree_strucutre(h_tree, keys, initialNumKeys);
+
+  // Now perform concurrent key insertion
+  // Initialize the batch
+  size_t insertionBatchSize = 1 << 10;
+  assert((insertionBatchSize + initialNumKeys) <= maxKeys);
+  std::vector<OperationT> ops(insertionBatchSize, OperationT::INSERT);
+
+  // Perform the operations
+  btree.concurrentOperations(keys.data() + initialNumKeys,
+                             values.data() + initialNumKeys,
+                             ops.data(),
+                             insertionBatchSize,
+                             SourceT::HOST);
+
+  // now validate again
+  numNodes = 0;
+  btree.compactTree(h_tree, maxNodes, numNodes, SourceT::HOST);
+  // Validation again
+  validate_tree_strucutre(h_tree, keys, initialNumKeys + insertionBatchSize);
+
+  // cleanup
+  delete[] h_tree;
+  btree.free();
+}
+
 int main(int argc, char** argv) {
   ::testing::InitGoogleTest(&argc, argv);
   return RUN_ALL_TESTS();
