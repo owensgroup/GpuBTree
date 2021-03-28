@@ -162,7 +162,7 @@ __global__ void delete_b_tree(uint32_t* d_root,
 }
 
 template<typename KeyT, typename ValueT, typename SizeT, typename AllocatorT>
-__global__ void range_b_tree(uint32_t*& d_root,
+__global__ void range_b_tree(uint32_t* d_root,
                              KeyT* d_queries_lower,
                              KeyT* d_queries_upper,
                              ValueT* d_range_results,

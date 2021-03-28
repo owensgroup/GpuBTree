@@ -651,6 +651,8 @@ __device__ void range_unit(uint32_t& laneId,
     KeyT src_key_upper = __shfl_sync(WARP_MASK, upper_bound, src_lane, 32);
     KeyT next = rootAddress;
     bool is_intermediate = true;
+    if (laneId == src_lane)
+      to_search = false;
     do {
       uint32_t src_unit_data = *(memAlloc->getAddressPtr(next) + laneId);
       is_intermediate = !((src_unit_data & 0x80000000) == 0);

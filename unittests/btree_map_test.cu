@@ -575,7 +575,7 @@ TEST(BTreeMap, RangeRandomKeys) {
   GpuBTree::GpuBTreeMap<uint32_t, uint32_t> btree;
 
   // Input number of keys
-  uint32_t numKeys = 512;
+  uint32_t numKeys = 128;
 
   // RNG
   std::random_device rd;
@@ -593,9 +593,11 @@ TEST(BTreeMap, RangeRandomKeys) {
   // shuffle the keys
   std::shuffle(keys.begin(), keys.end(), g);
 
+  auto to_value = [](uint32_t key) { return key; };
+
   // assign the values
   for (int iKey = 0; iKey < numKeys; iKey++) {
-    values.push_back(keys[iKey]);
+    values.push_back(to_value(keys[iKey]));
   }
 
   // Move data to GPU
@@ -614,14 +616,14 @@ TEST(BTreeMap, RangeRandomKeys) {
   // Input number of queries
   uint32_t numQueries = numKeys;
   uint32_t averageLength = 8;
-
+  uint32_t resultsLenght = averageLength * numQueries * 2;
   // Prepare the query keys
   std::vector<uint32_t> query_keys_lower;
   std::vector<uint32_t> query_keys_upper;
   std::vector<uint32_t> query_results;
   query_keys_lower.reserve(numQueries * 2);
   query_keys_upper.reserve(numQueries * 2);
-  query_results.resize(numQueries * averageLength);
+  query_results.resize(resultsLenght);
   for (int iKey = 0; iKey < numQueries * 2; iKey++) {
     query_keys_lower.push_back(iKey);
   }
@@ -631,15 +633,15 @@ TEST(BTreeMap, RangeRandomKeys) {
 
   // upper query bound
   for (int iKey = 0; iKey < numQueries * 2; iKey++) {
-    query_keys_upper.push_back(iKey + averageLength);
+    query_keys_upper.push_back(query_keys_lower[iKey] + averageLength - 1);
   }
 
   // Move data to GPU
   uint32_t *d_queries_lower, *d_queries_upper, *d_results;
   CHECK_ERROR(memoryUtil::deviceAlloc(d_queries_lower, numQueries));
   CHECK_ERROR(memoryUtil::deviceAlloc(d_queries_upper, numQueries));
-  CHECK_ERROR(memoryUtil::deviceAlloc(d_results, numQueries * averageLength));
-  CHECK_ERROR(memoryUtil::deviceSet(d_results, numQueries * averageLength, 0xff));
+  CHECK_ERROR(memoryUtil::deviceAlloc(d_results, resultsLenght));
+  CHECK_ERROR(memoryUtil::deviceSet(d_results, resultsLenght, 0xff));
   CHECK_ERROR(
       memoryUtil::cpyToDevice(query_keys_lower.data(), d_queries_lower, numQueries));
   CHECK_ERROR(
@@ -656,19 +658,31 @@ TEST(BTreeMap, RangeRandomKeys) {
   query_timer.timerStop();
 
   // Copy results back
-  CHECK_ERROR(
-      memoryUtil::cpyToHost(d_results, query_results.data(), numQueries * averageLength));
+  CHECK_ERROR(memoryUtil::cpyToHost(d_results, query_results.data(), resultsLenght));
 
-  // Expected results
-  std::vector<uint32_t> expected_results(numQueries * averageLength, 0xFFFFFFFF);
-  for (int iKey = 0; iKey < numQueries; iKey++) {
-    if (query_keys_lower[iKey] < numKeys) {
-      expected_results[iKey] = query_keys_lower[iKey];
+  std::sort(keys.begin(), keys.end());
+
+  for (size_t iQuery = 0; iQuery < numQueries; iQuery++) {
+    auto query_min = query_keys_lower[iQuery];
+    auto query_max = query_keys_upper[iQuery];
+    auto offset = iQuery * averageLength * 2;
+    auto result_ptr = query_results.data() + offset;
+    auto key_iter = std::lower_bound(keys.begin(), keys.end(), query_min);
+    auto cur_result_index = 0;
+    while (key_iter != keys.end() && *key_iter <= query_max) {
+      auto value = to_value(*key_iter);
+      EXPECT_EQ(*key_iter, result_ptr[cur_result_index]);  // expect key
+      cur_result_index++;
+      EXPECT_EQ(value, result_ptr[cur_result_index]);  // expect value
+      cur_result_index++;
+      key_iter++;
+    }
+    if (cur_result_index != averageLength * 2) {
+      EXPECT_EQ(result_ptr[cur_result_index],
+                0xffffffff);  // at the end there should be nothing
     }
   }
 
-  // Validate
-  // EXPECT_EQ(expected_results, query_results);
   // cleanup
   cudaFree(d_keys);
   cudaFree(d_values);

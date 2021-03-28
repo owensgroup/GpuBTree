@@ -213,7 +213,7 @@ class GpuBTreeMap {
     KeyT* d_queries_lower;
     KeyT* d_queries_upper;
     KeyT* d_results;
-    auto total_range_lenght = count * average_length;
+    auto total_range_lenght = count * average_length * 2;
     if (source == SourceT::HOST) {
       CHECK_ERROR(memoryUtil::deviceAlloc(d_queries_lower, count));
       CHECK_ERROR(memoryUtil::deviceAlloc(d_queries_upper, count));
