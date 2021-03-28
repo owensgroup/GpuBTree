@@ -66,6 +66,13 @@ class GpuBTreeMap {
                          KeyT*& d_queries,
                          SizeT& count,
                          cudaStream_t stream_id = 0);
+  cudaError_t rangeQuery(uint32_t*& root,
+                         KeyT*& d_queries_lower,
+                         KeyT*& d_queries_upper,
+                         ValueT*& d_range_results,
+                         SizeT& count,
+                         SizeT& range_lenght,
+                         cudaStream_t stream_id = 0);
   bool _handle_memory;
 
  public:
@@ -193,6 +200,40 @@ class GpuBTreeMap {
 
     if (source == SourceT::HOST) {
       CHECK_ERROR(memoryUtil::deviceFree(d_queries));
+    }
+
+    return cudaSuccess;
+  }
+  cudaError_t rangeQuery(KeyT* queries_lower,
+                         KeyT* queries_upper,
+                         ValueT* results,
+                         SizeT average_length,
+                         SizeT count,
+                         SourceT source = SourceT::DEVICE) {
+    KeyT* d_queries_lower;
+    KeyT* d_queries_upper;
+    KeyT* d_results;
+    auto total_range_lenght = count * average_length;
+    if (source == SourceT::HOST) {
+      CHECK_ERROR(memoryUtil::deviceAlloc(d_queries_lower, count));
+      CHECK_ERROR(memoryUtil::deviceAlloc(d_queries_upper, count));
+      CHECK_ERROR(memoryUtil::deviceAlloc(d_results, total_range_lenght));
+      CHECK_ERROR(memoryUtil::cpyToDevice(queries_lower, d_queries_lower, count));
+      CHECK_ERROR(memoryUtil::cpyToDevice(queries_upper, d_queries_upper, count));
+    } else {
+      d_queries_lower = queries_lower;
+      d_queries_upper = queries_upper;
+      d_results = results;
+    }
+
+    CHECK_ERROR(rangeQuery(
+        _d_root, d_queries_lower, d_queries_upper, d_results, count, average_length));
+
+    if (source == SourceT::HOST) {
+      CHECK_ERROR(memoryUtil::cpyToHost(d_results, results, total_range_lenght));
+      CHECK_ERROR(memoryUtil::deviceFree(d_results));
+      CHECK_ERROR(memoryUtil::deviceFree(d_queries_lower));
+      CHECK_ERROR(memoryUtil::deviceFree(d_queries_upper));
     }
 
     return cudaSuccess;
