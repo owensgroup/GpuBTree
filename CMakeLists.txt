@@ -1,96 +1,67 @@
-cmake_minimum_required (VERSION 3.8 FATAL_ERROR)
-project (GpuBTree)
+cmake_minimum_required(VERSION 3.19 FATAL_ERROR)
+if (CMAKE_VERSION VERSION_GREATER_EQUAL 3.18)
+  cmake_policy(SET CMP0104 OLD)
+endif()
 
-find_package(CUDA 9.0 REQUIRED)
+project(GpuBTree LANGUAGES CXX CUDA)
 
-option(CMAKE_VERBOSE_MAKEFILE ON)
-option(DGTEST "DGTEST"  ON)
+set(CMAKE_CXX_STANDARD 17)
+set(CMAKE_CUDA_STANDARD 17)
+set(CMAKE_CUDA_STANDARD_REQUIRED TRUE)
+set(CMAKE_CXX_STANDARD_REQUIRED TRUE)
 
-if (DGTEST)
-  include(${CMAKE_SOURCE_DIR}/cmake/FindGoogleTest.cmake)
-  message( ${CMAKE_SOURCE_DIR} )
-endif (DGTEST)
+#default build type is Release
+if ("${CMAKE_BUILD_TYPE}" STREQUAL "")
+    set(CMAKE_BUILD_TYPE Release)
+endif ()
 
-set(CUDA_NVCC_FLAGS -std=c++11)
-set (CMAKE_CXX_STANDARD 11)
+# Auto-detect GPU architecture, sets ${CUDA_ARCHS}
+include("cmake/AutoDetectCudaArch.cmake")
+include("cmake/FindGoogleTest.cmake")
 
-if (CUDA_VERBOSE_PTXAS)
-  set(VERBOSE_PTXAS --ptxas-options=-v)
-endif (CUDA_VERBOSE_PTXAS)
+# Direct all output to /bin directory
+set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/bin)
 
-#set(CMAKE_BUILD_TYPE "Release")
+# Enable IDE folder support
+set_property(GLOBAL PROPERTY USE_FOLDERS ON)
 
-set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin)
+# Hash tables lib
+add_library(gpu_btree INTERFACE)
+target_include_directories( gpu_btree
+                            INTERFACE "${CMAKE_CURRENT_SOURCE_DIR}/src"
+                            INTERFACE "${CMAKE_CUDA_TOOLKIT_INCLUDE_DIRECTORIES}")
+target_compile_features(gpu_btree INTERFACE cxx_std_17 cuda_std_17)
+set(CMAKE_CXX_EXTENSIONS OFF)
 
-set(GENCODE_SM30
-  -gencode=arch=compute_30,code=sm_30 -gencode=arch=compute_30,code=compute_30)
-set(GENCODE_SM35
-  -gencode=arch=compute_35,code=sm_35 -gencode=arch=compute_35,code=compute_35)
-set(GENCODE_SM37
-  -gencode=arch=compute_37,code=sm_37 -gencode=arch=compute_37,code=compute_37)
-set(GENCODE_SM50
-  -gencode=arch=compute_50,code=sm_50 -gencode=arch=compute_50,code=compute_50)
-set(GENCODE_SM60
-  -gencode=arch=compute_60,code=sm_60 -gencode=arch=compute_60,code=compute_60)
-set(GENCODE_SM61
-  -gencode=arch=compute_61,code=sm_61 -gencode=arch=compute_61,code=compute_61)
-set(GENCODE_SM70
-  -gencode=arch=compute_70,code=sm_70 -gencode=arch=compute_70,code=compute_70)
-set(GENCODE_SM71
-  -gencode=arch=compute_71,code=sm_71 -gencode=arch=compute_71,code=compute_71)
-set(GENCODE_SM75
--gencode=arch=compute_75,code=sm_75 -gencode=arch=compute_75,code=compute_75)
+# CUDA and C++ compiler flags
+set(CXX_FLAGS
+ -m64
+ -Wall
+ -std=c++17
+ $<$<STREQUAL:${MSVC},1>:-D_SCL_SECURE_NO_WARNINGS>)
+set(CUDA_FLAGS
+    -Xcompiler=-Wall
+    ${CUDA_ARCHS}
+	-lineinfo
+	--expt-extended-lambda
+    #-Xptxas -warn-spills -res-usage
+	$<$<STREQUAL:${MSVC},0>:-O3>
+    -Xcompiler)
 
-option(GPUBTREE_GENCODE_SM30 "GENCODE_SM30" OFF)
-option(GPUBTREE_GENCODE_SM35 "GENCODE_SM35" OFF)
-option(GPUBTREE_GENCODE_SM37 "GENCODE_SM37" OFF)
-option(GPUBTREE_GENCODE_SM50 "GENCODE_SM50" OFF)
-option(GPUBTREE_GENCODE_SM60 "GENCODE_SM60" OFF)
-option(GPUBTREE_GENCODE_SM61 "GENCODE_SM61" OFF)
-option(GPUBTREE_GENCODE_SM70 "GENCODE_SM70" ON)
-option(GPUBTREE_GENCODE_SM71 "GENCODE_SM71" OFF)
-option(GPUBTREE_GENCODE_SM75 "GENCODE_SM75" OFF)
+add_library(developer_flags INTERFACE)
+target_compile_options(developer_flags INTERFACE
+    $<$<COMPILE_LANGUAGE:CXX>:${CXX_FLAGS}>
+    $<$<COMPILE_LANGUAGE:CUDA>:${CUDA_FLAGS}>)
 
-if (GPUBTREE_GENCODE_SM30)
-  set(GENCODE ${GENCODE} ${GENCODE_SM30})
-endif(GPUBTREE_GENCODE_SM30)
+target_link_libraries(gpu_btree
+    INTERFACE $<BUILD_INTERFACE:developer_flags>
+    INTERFACE -lstdc++fs)
+## Fix includes in visual studio for intellisense
+set(CMAKE_VS_SDK_INCLUDE_DIRECTORIES
+    $(VC_IncludePath)
+    $(WindowsSDK_IncludePath)
+    "$(ProjectDir)..\\..\\src")
 
-if (GPUBTREE_GENCODE_SM35)
-  set(GENCODE ${GENCODE} ${GENCODE_SM35})
-endif(GPUBTREE_GENCODE_SM35)
-
-if (GPUBTREE_GENCODE_SM37)
-  set(GENCODE ${GENCODE} ${GENCODE_SM37})
-endif(GPUBTREE_GENCODE_SM37)
-
-if (GPUBTREE_GENCODE_SM50)
-  set(GENCODE ${GENCODE} ${GENCODE_SM50})
-endif(GPUBTREE_GENCODE_SM50)
-
-if (GPUBTREE_GENCODE_SM60)
-  set(GENCODE ${GENCODE} ${GENCODE_SM60})
-endif(GPUBTREE_GENCODE_SM60)
-
-if (GPUBTREE_GENCODE_SM61)
-  set(GENCODE ${GENCODE} ${GENCODE_SM61})
-endif(GPUBTREE_GENCODE_SM61)
-
-if (GPUBTREE_GENCODE_SM70)
-  set(GENCODE ${GENCODE} ${GENCODE_SM70})
-endif(GPUBTREE_GENCODE_SM70)
-
-if(GPUBTREE_GENCODE_SM71)
-  set(GENCODE ${GENCODE} ${GENCODE_SM71})
-endif(GPUBTREE_GENCODE_SM71)
-
-if(GPUBTREE_GENCODE_SM75)
-  set(GENCODE ${GENCODE} ${GENCODE_SM75})
-endif(GPUBTREE_GENCODE_SM75)
-
-include_directories(src)
+add_subdirectory(src)
 add_subdirectory(test)
 add_subdirectory(unittests)
-
-if (DGTEST)
-  enable_testing()
-endif()
