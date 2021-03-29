@@ -45,8 +45,8 @@ set(CUDA_FLAGS
 	-lineinfo
 	--expt-extended-lambda
     #-Xptxas -warn-spills -res-usage
-	$<$<STREQUAL:${MSVC},0>:-O3>
-    -Xcompiler)
+	$<$<STREQUAL:${MSVC},0>:-O3>)
+    #-Xcompiler)
 
 add_library(developer_flags INTERFACE)
 target_compile_options(developer_flags INTERFACE

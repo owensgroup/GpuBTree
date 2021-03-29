@@ -26,7 +26,7 @@
 #include "global.cuh"
 #include "utils.cuh"
 
-#include "allocator/bool_allocator.cuh"
+#include "allocator/pool_allocator.cuh"
 
 #include "map/kernels/map_warps.cu"
 #include "map/kernels/map_kernels.cu"

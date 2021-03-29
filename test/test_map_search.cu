@@ -53,7 +53,7 @@ int main(int argc, char* argv[]) {
   std::vector<uint32_t> values;
   keys.reserve(numKeys);
   values.reserve(numKeys);
-  for (int iKey = 0; iKey < numKeys; iKey++) {
+  for (uint32_t iKey = 0; iKey < numKeys; iKey++) {
     keys.push_back(iKey);
   }
 
@@ -61,7 +61,7 @@ int main(int argc, char* argv[]) {
   std::shuffle(keys.begin(), keys.end(), g);
 
   // assign the values
-  for (int iKey = 0; iKey < numKeys; iKey++) {
+  for (uint32_t iKey = 0; iKey < numKeys; iKey++) {
     values.push_back(keys[iKey]);
   }
 
@@ -91,7 +91,7 @@ int main(int argc, char* argv[]) {
   std::vector<uint32_t> query_results;
   query_keys.reserve(numQueries * 2);
   query_results.resize(numQueries);
-  for (int iKey = 0; iKey < numQueries * 2; iKey++) {
+  for (uint32_t iKey = 0; iKey < numQueries * 2; iKey++) {
     query_keys.push_back(iKey);
   }
 
@@ -114,7 +114,7 @@ int main(int argc, char* argv[]) {
 
   // Validate
   uint32_t exist_count = 0;
-  for (int iKey = 0; iKey < numQueries; iKey++) {
+  for (uint32_t iKey = 0; iKey < numQueries; iKey++) {
     if (query_keys[iKey] < numKeys) {
       exist_count++;
       if (query_results[iKey] != query_keys[iKey]) {

@@ -32,6 +32,7 @@
 #include <random>
 #include <vector>
 #include <queue>
+#include <utility>
 
 #include "GpuBTree.h"
 
@@ -142,440 +143,133 @@ void validate_tree_strucutre(key_t* h_tree, std::vector<key_t>& keys) {
   }
 
   std::sort(keys.begin(), keys.end());  // sort keys
-  for (int iKey = 0; iKey < keys.size(); iKey++) {
+  for (uint32_t iKey = 0; iKey < keys.size(); iKey++) {
     key_t treeKey = tree_pairs[iKey].first - 2;
     value_t treeVal = tree_pairs[iKey].second - 2;
     ASSERT_EQ(keys[iKey], treeKey);
     ASSERT_EQ(treeKey, treeVal);
   }
 }
-// TEST(BTreeMap, SimpleBuild) {
-//   using key_t = uint32_t;
-//   using value_t = uint32_t;
-
-//   GpuBTree::GpuBTreeMap<key_t, value_t> btree;
-
-//   // Input number of keys
-//   size_t numKeys = 1 << 10;
-
-//   // Prepare the keys
-//   std::vector<key_t> keys;
-//   std::vector<value_t> values;
-//   keys.reserve(numKeys);
-//   values.reserve(numKeys);
-//   for (int iKey = 0; iKey < numKeys; iKey++) {
-//     keys.push_back(iKey);
-//   }
-
-//   // shuffle the keys
-//   std::random_device rd;
-//   std::mt19937 g(rd());
-//   std::shuffle(keys.begin(), keys.end(), g);
-
-//   // assign the values
-//   for (int iKey = 0; iKey < numKeys; iKey++) {
-//     values.push_back(keys[iKey]);
-//   }
-
-//   // Move data to GPU
-//   key_t* d_keys;
-//   value_t* d_values;
-//   CHECK_ERROR(memoryUtil::deviceAlloc(d_keys, numKeys));
-//   CHECK_ERROR(memoryUtil::deviceAlloc(d_values, numKeys));
-//   CHECK_ERROR(memoryUtil::cpyToDevice(keys.data(), d_keys, numKeys));
-//   CHECK_ERROR(memoryUtil::cpyToDevice(values.data(), d_values, numKeys));
-
-//   // Build the tree
-//   GpuTimer timer;
-//   timer.timerStart();
-//   btree.insertKeys(d_keys, d_values, numKeys, SourceT::DEVICE);
-//   timer.timerStop();
-
-//   uint32_t max_nodes = 1 << 19;
-//   key_t* h_tree = new uint32_t[max_nodes * NODE_WIDTH];
-//   uint32_t num_nodes = 0;
-//   btree.compactTree(h_tree, max_nodes, num_nodes, SourceT::HOST);
-
-//   // Validation
-//   validate_tree_strucutre(h_tree, keys);
-//   // cleanup
-//   cudaFree(d_keys);
-//   cudaFree(d_values);
-//   delete[] h_tree;
-//   btree.free();
-// }
-
-// TEST(BTreeMap, BuildSameKeys) {
-//   using key_t = uint32_t;
-//   using value_t = uint32_t;
-
-//   GpuBTree::GpuBTreeMap<key_t, value_t> btree;
-
-//   // Input number of keys
-//   size_t numKeys = 1 << 10;
-
-//   // Prepare the keys
-//   std::vector<key_t> keys;
-//   std::vector<key_t> unique_keys;
-//   std::vector<value_t> values;
-//   keys.reserve(numKeys);
-//   values.reserve(numKeys);
-//   for (int iKey = 0; iKey < numKeys / 2; iKey++) {
-//     keys.push_back(iKey);
-//     keys.push_back(iKey);
-//     unique_keys.push_back(iKey);
-//   }
-
-//   // shuffle the keys
-//   std::random_device rd;
-//   std::mt19937 g(rd());
-//   std::shuffle(keys.begin(), keys.end(), g);
-
-//   // assign the values
-//   for (int iKey = 0; iKey < numKeys; iKey++) {
-//     values.push_back(keys[iKey]);
-//   }
-
-//   // Move data to GPU
-//   key_t* d_keys;
-//   value_t* d_values;
-//   CHECK_ERROR(memoryUtil::deviceAlloc(d_keys, numKeys));
-//   CHECK_ERROR(memoryUtil::deviceAlloc(d_values, numKeys));
-//   CHECK_ERROR(memoryUtil::cpyToDevice(keys.data(), d_keys, numKeys));
-//   CHECK_ERROR(memoryUtil::cpyToDevice(values.data(), d_values, numKeys));
-
-//   // Build the tree
-//   GpuTimer timer;
-//   timer.timerStart();
-//   btree.insertKeys(d_keys, d_values, numKeys, SourceT::DEVICE);
-//   timer.timerStop();
-
-//   uint32_t max_nodes = 1 << 19;
-//   key_t* h_tree = new uint32_t[max_nodes * NODE_WIDTH];
-//   uint32_t num_nodes = 0;
-//   btree.compactTree(h_tree, max_nodes, num_nodes, SourceT::HOST);
-
-//   // Validation
-//   validate_tree_strucutre(h_tree, unique_keys);
-//   // cleanup
-//   cudaFree(d_keys);
-//   cudaFree(d_values);
-//   delete[] h_tree;
-//   btree.free();
-// }
-
-// TEST(BTreeMap, SearchRandomKeys) {
-//   GpuBTree::GpuBTreeMap<uint32_t, uint32_t> btree;
-
-//   // Input number of keys
-//   uint32_t numKeys = 512;
-
-//   // RNG
-//   std::random_device rd;
-//   std::mt19937 g(rd());
-
-//   // Prepare the keys
-//   std::vector<uint32_t> keys;
-//   std::vector<uint32_t> values;
-//   keys.reserve(numKeys);
-//   values.reserve(numKeys);
-//   for (int iKey = 0; iKey < numKeys; iKey++) {
-//     keys.push_back(iKey);
-//   }
-
-//   // shuffle the keys
-//   std::shuffle(keys.begin(), keys.end(), g);
-
-//   // assign the values
-//   for (int iKey = 0; iKey < numKeys; iKey++) {
-//     values.push_back(keys[iKey]);
-//   }
-
-//   // Move data to GPU
-//   uint32_t *d_keys, *d_values;
-//   CHECK_ERROR(memoryUtil::deviceAlloc(d_keys, numKeys));
-//   CHECK_ERROR(memoryUtil::deviceAlloc(d_values, numKeys));
-//   CHECK_ERROR(memoryUtil::cpyToDevice(keys.data(), d_keys, numKeys));
-//   CHECK_ERROR(memoryUtil::cpyToDevice(values.data(), d_values, numKeys));
-
-//   // Build the tree
-//   GpuTimer build_timer;
-//   build_timer.timerStart();
-//   btree.insertKeys(d_keys, d_values, numKeys, SourceT::DEVICE);
-//   build_timer.timerStop();
-
-//   // Input number of queries
-//   uint32_t numQueries = numKeys;
-
-//   // Prepare the query keys
-//   std::vector<uint32_t> query_keys;
-//   std::vector<uint32_t> query_results;
-//   query_keys.reserve(numQueries * 2);
-//   query_results.resize(numQueries);
-//   for (int iKey = 0; iKey < numQueries * 2; iKey++) {
-//     query_keys.push_back(iKey);
-//   }
-
-//   // shuffle the queries
-//   std::shuffle(query_keys.begin(), query_keys.end(), g);
-
-//   // Move data to GPU
-//   uint32_t *d_queries, *d_results;
-//   CHECK_ERROR(memoryUtil::deviceAlloc(d_queries, numQueries));
-//   CHECK_ERROR(memoryUtil::deviceAlloc(d_results, numQueries));
-//   CHECK_ERROR(memoryUtil::cpyToDevice(query_keys.data(), d_queries, numQueries));
-
-//   GpuTimer query_timer;
-//   query_timer.timerStart();
-//   btree.searchKeys(d_queries, d_results, numQueries, SourceT::DEVICE);
-//   query_timer.timerStop();
-
-//   // Copy results back
-//   CHECK_ERROR(memoryUtil::cpyToHost(d_results, query_results.data(), numQueries));
-
-//   // Expected results
-//   std::vector<uint32_t> expected_results(numQueries, 0);
-//   for (int iKey = 0; iKey < numQueries; iKey++) {
-//     if (query_keys[iKey] < numKeys) {
-//       expected_results[iKey] = query_keys[iKey];
-//     }
-//   }
-
-//   // Validate
-//   EXPECT_EQ(expected_results, query_results);
-//   // cleanup
-//   cudaFree(d_keys);
-//   cudaFree(d_values);
-//   cudaFree(d_queries);
-//   cudaFree(d_results);
-//   btree.free();
-// }
-
-// TEST(BTreeMap, DeleteRandomKeys) {
-//   using key_t = uint32_t;
-//   using value_t = uint32_t;
-
-//   GpuBTree::GpuBTreeMap<key_t, value_t> btree;
-
-//   // Input number of keys
-//   size_t numKeys = 1 << 10;
-
-//   // Prepare the keys
-//   std::vector<key_t> keys;
-//   std::vector<value_t> values;
-//   keys.reserve(numKeys);
-//   values.reserve(numKeys);
-//   for (int iKey = 0; iKey < numKeys; iKey++) {
-//     keys.push_back(iKey);
-//   }
-
-//   // shuffle the keys
-//   std::random_device rd;
-//   std::mt19937 g(rd());
-//   std::shuffle(keys.begin(), keys.end(), g);
-
-//   // assign the values
-//   for (int iKey = 0; iKey < numKeys; iKey++) {
-//     values.push_back(keys[iKey]);
-//   }
-
-//   // Move data to GPU
-//   key_t* d_keys;
-//   value_t* d_values;
-//   CHECK_ERROR(memoryUtil::deviceAlloc(d_keys, numKeys));
-//   CHECK_ERROR(memoryUtil::deviceAlloc(d_values, numKeys));
-//   CHECK_ERROR(memoryUtil::cpyToDevice(keys.data(), d_keys, numKeys));
-//   CHECK_ERROR(memoryUtil::cpyToDevice(values.data(), d_values, numKeys));
-
-//   // Build the tree
-//   GpuTimer timer;
-//   timer.timerStart();
-//   btree.insertKeys(d_keys, d_values, numKeys, SourceT::DEVICE);
-//   timer.timerStop();
-
-//   // Generate a batch of keys to delete
-//   std::vector<key_t> keys_deleted;
-//   uint32_t numDeletedKeys = 512;
-//   keys_deleted.reserve(numDeletedKeys);
-//   std::shuffle(keys.begin(), keys.end(), g);  // shuffle the keys again
-
-//   // delete the last numDeletedKeys
-//   int starting_idx = keys.size() - numDeletedKeys;
-//   for (int iKey = starting_idx; iKey < keys.size(); iKey++) {
-//     keys_deleted.push_back(keys[iKey]);
-//   }
-
-//   // Move data to GPU
-//   key_t* d_keys_deleted;
-//   CHECK_ERROR(memoryUtil::deviceAlloc(d_keys_deleted, numDeletedKeys));
-//   CHECK_ERROR(
-//       memoryUtil::cpyToDevice(keys_deleted.data(), d_keys_deleted, numDeletedKeys));
-
-//   // Apply the deleteion batch to the btree
-//   btree.deleteKeys(d_keys_deleted, numDeletedKeys, SourceT::DEVICE);
-
-//   // Now we can apply deleteion by resizeing the vector
-//   keys.resize(starting_idx);
-
-//   uint32_t max_nodes = 1 << 19;
-//   key_t* h_tree = new uint32_t[max_nodes * NODE_WIDTH];
-//   uint32_t num_nodes = 0;
-//   btree.compactTree(h_tree, max_nodes, num_nodes, SourceT::HOST);
-
-//   // Validation
-//   validate_tree_strucutre(h_tree, keys);
-//   // cleanup
-//   cudaFree(d_keys_deleted);
-//   cudaFree(d_keys);
-//   cudaFree(d_values);
-//   delete[] h_tree;
-//   btree.free();
-// }
-
-// TEST(BTreeMap, DeleteAllKeys) {
-//   using key_t = uint32_t;
-//   using value_t = uint32_t;
-
-//   GpuBTree::GpuBTreeMap<key_t, value_t> btree;
-
-//   // Input number of keys
-//   size_t numKeys = 1 << 10;
-
-//   // Prepare the keys
-//   std::vector<key_t> keys;
-//   std::vector<value_t> values;
-//   keys.reserve(numKeys);
-//   values.reserve(numKeys);
-//   for (int iKey = 0; iKey < numKeys; iKey++) {
-//     keys.push_back(iKey);
-//   }
-
-//   // shuffle the keys
-//   std::random_device rd;
-//   std::mt19937 g(rd());
-//   std::shuffle(keys.begin(), keys.end(), g);
-
-//   // assign the values
-//   for (int iKey = 0; iKey < numKeys; iKey++) {
-//     values.push_back(keys[iKey]);
-//   }
-
-//   // Move data to GPU
-//   key_t* d_keys;
-//   value_t* d_values;
-//   CHECK_ERROR(memoryUtil::deviceAlloc(d_keys, numKeys));
-//   CHECK_ERROR(memoryUtil::deviceAlloc(d_values, numKeys));
-//   CHECK_ERROR(memoryUtil::cpyToDevice(keys.data(), d_keys, numKeys));
-//   CHECK_ERROR(memoryUtil::cpyToDevice(values.data(), d_values, numKeys));
-
-//   // Build the tree
-//   GpuTimer timer;
-//   timer.timerStart();
-//   btree.insertKeys(d_keys, d_values, numKeys, SourceT::DEVICE);
-//   timer.timerStop();
-
-//   // Generate a batch of keys to delete which is all keys
-//   std::shuffle(keys.begin(), keys.end(), g);
-
-//   // Apply the deleteion batch to the btree
-//   btree.deleteKeys(d_keys, numKeys, SourceT::DEVICE);
-
-//   uint32_t max_nodes = 1 << 19;
-//   key_t* h_tree = new uint32_t[max_nodes * NODE_WIDTH];
-//   uint32_t num_nodes = 0;
-//   btree.compactTree(h_tree, max_nodes, num_nodes, SourceT::HOST);
-
-//   // Validation
-//   keys.clear();  // Deleting all keys
-//   validate_tree_strucutre(h_tree, keys);
-//   // cleanup
-//   cudaFree(d_keys);
-//   cudaFree(d_values);
-//   delete[] h_tree;
-//   btree.free();
-// }
-
-// TEST(BTreeMap, DeleteNoKeys) {
-//   using key_t = uint32_t;
-//   using value_t = uint32_t;
-
-//   GpuBTree::GpuBTreeMap<key_t, value_t> btree;
-
-//   // Input number of keys
-//   size_t numKeys = 1 << 10;
-
-//   // Prepare the keys
-//   std::vector<key_t> keys;
-//   std::vector<value_t> values;
-//   keys.reserve(numKeys);
-//   values.reserve(numKeys);
-//   for (int iKey = 0; iKey < numKeys; iKey++) {
-//     keys.push_back(iKey);
-//   }
-
-//   // shuffle the keys
-//   std::random_device rd;
-//   std::mt19937 g(rd());
-//   std::shuffle(keys.begin(), keys.end(), g);
-
-//   // assign the values
-//   for (int iKey = 0; iKey < numKeys; iKey++) {
-//     values.push_back(keys[iKey]);
-//   }
-
-//   // Move data to GPU
-//   key_t* d_keys;
-//   value_t* d_values;
-//   CHECK_ERROR(memoryUtil::deviceAlloc(d_keys, numKeys));
-//   CHECK_ERROR(memoryUtil::deviceAlloc(d_values, numKeys));
-//   CHECK_ERROR(memoryUtil::cpyToDevice(keys.data(), d_keys, numKeys));
-//   CHECK_ERROR(memoryUtil::cpyToDevice(values.data(), d_values, numKeys));
-
-//   // Build the tree
-//   GpuTimer timer;
-//   timer.timerStart();
-//   btree.insertKeys(d_keys, d_values, numKeys, SourceT::DEVICE);
-//   timer.timerStop();
-
-//   // Generate a batch of keys to delete
-//   std::vector<key_t> keys_deleted;
-//   uint32_t numDeletedKeys = 512;
-//   keys_deleted.reserve(numDeletedKeys);
-
-//   for (int iKey = 0; iKey < numDeletedKeys; iKey++) {
-//     keys_deleted.push_back(numKeys + iKey);
-//   }
-//   std::shuffle(keys_deleted.begin(), keys_deleted.end(), g);
-
-//   // Move data to GPU
-//   key_t* d_keys_deleted;
-//   CHECK_ERROR(memoryUtil::deviceAlloc(d_keys_deleted, numDeletedKeys));
-//   CHECK_ERROR(
-//       memoryUtil::cpyToDevice(keys_deleted.data(), d_keys_deleted, numDeletedKeys));
-
-//   // Apply the deleteion batch to the btree
-//   btree.deleteKeys(d_keys_deleted, numDeletedKeys, SourceT::DEVICE);
-
-//   uint32_t max_nodes = 1 << 19;
-//   key_t* h_tree = new uint32_t[max_nodes * NODE_WIDTH];
-//   uint32_t num_nodes = 0;
-//   btree.compactTree(h_tree, max_nodes, num_nodes, SourceT::HOST);
-
-//   // Validation
-//   validate_tree_strucutre(h_tree, keys);
-//   // cleanup
-//   cudaFree(d_keys_deleted);
-//   cudaFree(d_keys);
-//   cudaFree(d_values);
-//   delete[] h_tree;
-//   btree.free();
-// }
-
-TEST(BTreeMap, RangeRandomKeys) {
+TEST(BTreeMap, SimpleBuild) {
+  using key_t = uint32_t;
+  using value_t = uint32_t;
+
+  GpuBTree::GpuBTreeMap<key_t, value_t> btree;
+
+  // Input number of keys
+  size_t numKeys = 1 << 10;
+
+  // Prepare the keys
+  std::vector<key_t> keys;
+  std::vector<value_t> values;
+  keys.reserve(numKeys);
+  values.reserve(numKeys);
+  for (uint32_t iKey = 0; iKey < numKeys; iKey++) {
+    keys.push_back(iKey);
+  }
+
+  // shuffle the keys
+  std::random_device rd;
+  std::mt19937 g(rd());
+  std::shuffle(keys.begin(), keys.end(), g);
+
+  // assign the values
+  for (uint32_t iKey = 0; iKey < numKeys; iKey++) {
+    values.push_back(keys[iKey]);
+  }
+
+  // Move data to GPU
+  key_t* d_keys;
+  value_t* d_values;
+  CHECK_ERROR(memoryUtil::deviceAlloc(d_keys, numKeys));
+  CHECK_ERROR(memoryUtil::deviceAlloc(d_values, numKeys));
+  CHECK_ERROR(memoryUtil::cpyToDevice(keys.data(), d_keys, numKeys));
+  CHECK_ERROR(memoryUtil::cpyToDevice(values.data(), d_values, numKeys));
+
+  // Build the tree
+  GpuTimer timer;
+  timer.timerStart();
+  btree.insertKeys(d_keys, d_values, numKeys, SourceT::DEVICE);
+  timer.timerStop();
+
+  uint32_t max_nodes = 1 << 19;
+  key_t* h_tree = new uint32_t[max_nodes * NODE_WIDTH];
+  uint32_t num_nodes = 0;
+  btree.compactTree(h_tree, max_nodes, num_nodes, SourceT::HOST);
+
+  // Validation
+  validate_tree_strucutre(h_tree, keys);
+  // cleanup
+  cudaFree(d_keys);
+  cudaFree(d_values);
+  delete[] h_tree;
+  btree.free();
+}
+
+TEST(BTreeMap, BuildSameKeys) {
+  using key_t = uint32_t;
+  using value_t = uint32_t;
+
+  GpuBTree::GpuBTreeMap<key_t, value_t> btree;
+
+  // Input number of keys
+  size_t numKeys = 1 << 10;
+
+  // Prepare the keys
+  std::vector<key_t> keys;
+  std::vector<key_t> unique_keys;
+  std::vector<value_t> values;
+  keys.reserve(numKeys);
+  values.reserve(numKeys);
+  for (uint32_t iKey = 0; iKey < numKeys / 2; iKey++) {
+    keys.push_back(iKey);
+    keys.push_back(iKey);
+    unique_keys.push_back(iKey);
+  }
+
+  // shuffle the keys
+  std::random_device rd;
+  std::mt19937 g(rd());
+  std::shuffle(keys.begin(), keys.end(), g);
+
+  // assign the values
+  for (uint32_t iKey = 0; iKey < numKeys; iKey++) {
+    values.push_back(keys[iKey]);
+  }
+
+  // Move data to GPU
+  key_t* d_keys;
+  value_t* d_values;
+  CHECK_ERROR(memoryUtil::deviceAlloc(d_keys, numKeys));
+  CHECK_ERROR(memoryUtil::deviceAlloc(d_values, numKeys));
+  CHECK_ERROR(memoryUtil::cpyToDevice(keys.data(), d_keys, numKeys));
+  CHECK_ERROR(memoryUtil::cpyToDevice(values.data(), d_values, numKeys));
+
+  // Build the tree
+  GpuTimer timer;
+  timer.timerStart();
+  btree.insertKeys(d_keys, d_values, numKeys, SourceT::DEVICE);
+  timer.timerStop();
+
+  uint32_t max_nodes = 1 << 19;
+  key_t* h_tree = new uint32_t[max_nodes * NODE_WIDTH];
+  uint32_t num_nodes = 0;
+  btree.compactTree(h_tree, max_nodes, num_nodes, SourceT::HOST);
+
+  // Validation
+  validate_tree_strucutre(h_tree, unique_keys);
+  // cleanup
+  cudaFree(d_keys);
+  cudaFree(d_values);
+  delete[] h_tree;
+  btree.free();
+}
+
+TEST(BTreeMap, SearchRandomKeys) {
   GpuBTree::GpuBTreeMap<uint32_t, uint32_t> btree;
 
   // Input number of keys
-  uint32_t numKeys = 128;
+  uint32_t numKeys = 512;
 
   // RNG
   std::random_device rd;
@@ -586,7 +280,314 @@ TEST(BTreeMap, RangeRandomKeys) {
   std::vector<uint32_t> values;
   keys.reserve(numKeys);
   values.reserve(numKeys);
-  for (int iKey = 0; iKey < numKeys; iKey++) {
+  for (uint32_t iKey = 0; iKey < numKeys; iKey++) {
+    keys.push_back(iKey);
+  }
+
+  // shuffle the keys
+  std::shuffle(keys.begin(), keys.end(), g);
+
+  // assign the values
+  for (uint32_t iKey = 0; iKey < numKeys; iKey++) {
+    values.push_back(keys[iKey]);
+  }
+
+  // Move data to GPU
+  uint32_t *d_keys, *d_values;
+  CHECK_ERROR(memoryUtil::deviceAlloc(d_keys, numKeys));
+  CHECK_ERROR(memoryUtil::deviceAlloc(d_values, numKeys));
+  CHECK_ERROR(memoryUtil::cpyToDevice(keys.data(), d_keys, numKeys));
+  CHECK_ERROR(memoryUtil::cpyToDevice(values.data(), d_values, numKeys));
+
+  // Build the tree
+  GpuTimer build_timer;
+  build_timer.timerStart();
+  btree.insertKeys(d_keys, d_values, numKeys, SourceT::DEVICE);
+  build_timer.timerStop();
+
+  // Input number of queries
+  uint32_t numQueries = numKeys;
+
+  // Prepare the query keys
+  std::vector<uint32_t> query_keys;
+  std::vector<uint32_t> query_results;
+  query_keys.reserve(numQueries * 2);
+  query_results.resize(numQueries);
+  for (uint32_t iKey = 0; iKey < numQueries * 2; iKey++) {
+    query_keys.push_back(iKey);
+  }
+
+  // shuffle the queries
+  std::shuffle(query_keys.begin(), query_keys.end(), g);
+
+  // Move data to GPU
+  uint32_t *d_queries, *d_results;
+  CHECK_ERROR(memoryUtil::deviceAlloc(d_queries, numQueries));
+  CHECK_ERROR(memoryUtil::deviceAlloc(d_results, numQueries));
+  CHECK_ERROR(memoryUtil::cpyToDevice(query_keys.data(), d_queries, numQueries));
+
+  GpuTimer query_timer;
+  query_timer.timerStart();
+  btree.searchKeys(d_queries, d_results, numQueries, SourceT::DEVICE);
+  query_timer.timerStop();
+
+  // Copy results back
+  CHECK_ERROR(memoryUtil::cpyToHost(d_results, query_results.data(), numQueries));
+
+  // Expected results
+  std::vector<uint32_t> expected_results(numQueries, 0);
+  for (uint32_t iKey = 0; iKey < numQueries; iKey++) {
+    if (query_keys[iKey] < numKeys) {
+      expected_results[iKey] = query_keys[iKey];
+    }
+  }
+
+  // Validate
+  EXPECT_EQ(expected_results, query_results);
+  // cleanup
+  cudaFree(d_keys);
+  cudaFree(d_values);
+  cudaFree(d_queries);
+  cudaFree(d_results);
+  btree.free();
+}
+
+TEST(BTreeMap, DeleteRandomKeys) {
+  using key_t = uint32_t;
+  using value_t = uint32_t;
+
+  GpuBTree::GpuBTreeMap<key_t, value_t> btree;
+
+  // Input number of keys
+  size_t numKeys = 1 << 10;
+
+  // Prepare the keys
+  std::vector<key_t> keys;
+  std::vector<value_t> values;
+  keys.reserve(numKeys);
+  values.reserve(numKeys);
+  for (uint32_t iKey = 0; iKey < numKeys; iKey++) {
+    keys.push_back(iKey);
+  }
+
+  // shuffle the keys
+  std::random_device rd;
+  std::mt19937 g(rd());
+  std::shuffle(keys.begin(), keys.end(), g);
+
+  // assign the values
+  for (uint32_t iKey = 0; iKey < numKeys; iKey++) {
+    values.push_back(keys[iKey]);
+  }
+
+  // Move data to GPU
+  key_t* d_keys;
+  value_t* d_values;
+  CHECK_ERROR(memoryUtil::deviceAlloc(d_keys, numKeys));
+  CHECK_ERROR(memoryUtil::deviceAlloc(d_values, numKeys));
+  CHECK_ERROR(memoryUtil::cpyToDevice(keys.data(), d_keys, numKeys));
+  CHECK_ERROR(memoryUtil::cpyToDevice(values.data(), d_values, numKeys));
+
+  // Build the tree
+  GpuTimer timer;
+  timer.timerStart();
+  btree.insertKeys(d_keys, d_values, numKeys, SourceT::DEVICE);
+  timer.timerStop();
+
+  // Generate a batch of keys to delete
+  std::vector<key_t> keys_deleted;
+  uint32_t numDeletedKeys = 512;
+  keys_deleted.reserve(numDeletedKeys);
+  std::shuffle(keys.begin(), keys.end(), g);  // shuffle the keys again
+
+  // delete the last numDeletedKeys
+  int starting_idx = keys.size() - numDeletedKeys;
+  for (uint32_t iKey = starting_idx; iKey < keys.size(); iKey++) {
+    keys_deleted.push_back(keys[iKey]);
+  }
+
+  // Move data to GPU
+  key_t* d_keys_deleted;
+  CHECK_ERROR(memoryUtil::deviceAlloc(d_keys_deleted, numDeletedKeys));
+  CHECK_ERROR(
+      memoryUtil::cpyToDevice(keys_deleted.data(), d_keys_deleted, numDeletedKeys));
+
+  // Apply the deleteion batch to the btree
+  btree.deleteKeys(d_keys_deleted, numDeletedKeys, SourceT::DEVICE);
+
+  // Now we can apply deleteion by resizeing the vector
+  keys.resize(starting_idx);
+
+  uint32_t max_nodes = 1 << 19;
+  key_t* h_tree = new uint32_t[max_nodes * NODE_WIDTH];
+  uint32_t num_nodes = 0;
+  btree.compactTree(h_tree, max_nodes, num_nodes, SourceT::HOST);
+
+  // Validation
+  validate_tree_strucutre(h_tree, keys);
+  // cleanup
+  cudaFree(d_keys_deleted);
+  cudaFree(d_keys);
+  cudaFree(d_values);
+  delete[] h_tree;
+  btree.free();
+}
+
+TEST(BTreeMap, DeleteAllKeys) {
+  using key_t = uint32_t;
+  using value_t = uint32_t;
+
+  GpuBTree::GpuBTreeMap<key_t, value_t> btree;
+
+  // Input number of keys
+  size_t numKeys = 1 << 10;
+
+  // Prepare the keys
+  std::vector<key_t> keys;
+  std::vector<value_t> values;
+  keys.reserve(numKeys);
+  values.reserve(numKeys);
+  for (uint32_t iKey = 0; iKey < numKeys; iKey++) {
+    keys.push_back(iKey);
+  }
+
+  // shuffle the keys
+  std::random_device rd;
+  std::mt19937 g(rd());
+  std::shuffle(keys.begin(), keys.end(), g);
+
+  // assign the values
+  for (uint32_t iKey = 0; iKey < numKeys; iKey++) {
+    values.push_back(keys[iKey]);
+  }
+
+  // Move data to GPU
+  key_t* d_keys;
+  value_t* d_values;
+  CHECK_ERROR(memoryUtil::deviceAlloc(d_keys, numKeys));
+  CHECK_ERROR(memoryUtil::deviceAlloc(d_values, numKeys));
+  CHECK_ERROR(memoryUtil::cpyToDevice(keys.data(), d_keys, numKeys));
+  CHECK_ERROR(memoryUtil::cpyToDevice(values.data(), d_values, numKeys));
+
+  // Build the tree
+  GpuTimer timer;
+  timer.timerStart();
+  btree.insertKeys(d_keys, d_values, numKeys, SourceT::DEVICE);
+  timer.timerStop();
+
+  // Generate a batch of keys to delete which is all keys
+  std::shuffle(keys.begin(), keys.end(), g);
+
+  // Apply the deleteion batch to the btree
+  btree.deleteKeys(d_keys, numKeys, SourceT::DEVICE);
+
+  uint32_t max_nodes = 1 << 19;
+  key_t* h_tree = new uint32_t[max_nodes * NODE_WIDTH];
+  uint32_t num_nodes = 0;
+  btree.compactTree(h_tree, max_nodes, num_nodes, SourceT::HOST);
+
+  // Validation
+  keys.clear();  // Deleting all keys
+  validate_tree_strucutre(h_tree, keys);
+  // cleanup
+  cudaFree(d_keys);
+  cudaFree(d_values);
+  delete[] h_tree;
+  btree.free();
+}
+
+TEST(BTreeMap, DeleteNoKeys) {
+  using key_t = uint32_t;
+  using value_t = uint32_t;
+
+  GpuBTree::GpuBTreeMap<key_t, value_t> btree;
+
+  // Input number of keys
+  size_t numKeys = 1 << 10;
+
+  // Prepare the keys
+  std::vector<key_t> keys;
+  std::vector<value_t> values;
+  keys.reserve(numKeys);
+  values.reserve(numKeys);
+  for (uint32_t iKey = 0; iKey < numKeys; iKey++) {
+    keys.push_back(iKey);
+  }
+
+  // shuffle the keys
+  std::random_device rd;
+  std::mt19937 g(rd());
+  std::shuffle(keys.begin(), keys.end(), g);
+
+  // assign the values
+  for (uint32_t iKey = 0; iKey < numKeys; iKey++) {
+    values.push_back(keys[iKey]);
+  }
+
+  // Move data to GPU
+  key_t* d_keys;
+  value_t* d_values;
+  CHECK_ERROR(memoryUtil::deviceAlloc(d_keys, numKeys));
+  CHECK_ERROR(memoryUtil::deviceAlloc(d_values, numKeys));
+  CHECK_ERROR(memoryUtil::cpyToDevice(keys.data(), d_keys, numKeys));
+  CHECK_ERROR(memoryUtil::cpyToDevice(values.data(), d_values, numKeys));
+
+  // Build the tree
+  GpuTimer timer;
+  timer.timerStart();
+  btree.insertKeys(d_keys, d_values, numKeys, SourceT::DEVICE);
+  timer.timerStop();
+
+  // Generate a batch of keys to delete
+  std::vector<key_t> keys_deleted;
+  uint32_t numDeletedKeys = 512;
+  keys_deleted.reserve(numDeletedKeys);
+
+  for (uint32_t iKey = 0; iKey < numDeletedKeys; iKey++) {
+    keys_deleted.push_back(numKeys + iKey);
+  }
+  std::shuffle(keys_deleted.begin(), keys_deleted.end(), g);
+
+  // Move data to GPU
+  key_t* d_keys_deleted;
+  CHECK_ERROR(memoryUtil::deviceAlloc(d_keys_deleted, numDeletedKeys));
+  CHECK_ERROR(
+      memoryUtil::cpyToDevice(keys_deleted.data(), d_keys_deleted, numDeletedKeys));
+
+  // Apply the deleteion batch to the btree
+  btree.deleteKeys(d_keys_deleted, numDeletedKeys, SourceT::DEVICE);
+
+  uint32_t max_nodes = 1 << 19;
+  key_t* h_tree = new uint32_t[max_nodes * NODE_WIDTH];
+  uint32_t num_nodes = 0;
+  btree.compactTree(h_tree, max_nodes, num_nodes, SourceT::HOST);
+
+  // Validation
+  validate_tree_strucutre(h_tree, keys);
+  // cleanup
+  cudaFree(d_keys_deleted);
+  cudaFree(d_keys);
+  cudaFree(d_values);
+  delete[] h_tree;
+  btree.free();
+}
+
+TEST(BTreeMap, RangeRandomKeys) {
+  GpuBTree::GpuBTreeMap<uint32_t, uint32_t> btree;
+
+  // Input number of keys
+  uint32_t numKeys = 2048;
+
+  // RNG
+  std::random_device rd;
+  std::mt19937 g(rd());
+
+  // Prepare the keys
+  std::vector<uint32_t> keys;
+  std::vector<uint32_t> values;
+  keys.reserve(numKeys);
+  values.reserve(numKeys);
+  for (uint32_t iKey = 0; iKey < numKeys; iKey++) {
     keys.push_back(iKey);
   }
 
@@ -596,7 +597,7 @@ TEST(BTreeMap, RangeRandomKeys) {
   auto to_value = [](uint32_t key) { return key; };
 
   // assign the values
-  for (int iKey = 0; iKey < numKeys; iKey++) {
+  for (uint32_t iKey = 0; iKey < numKeys; iKey++) {
     values.push_back(to_value(keys[iKey]));
   }
 
@@ -624,7 +625,7 @@ TEST(BTreeMap, RangeRandomKeys) {
   query_keys_lower.reserve(numQueries * 2);
   query_keys_upper.reserve(numQueries * 2);
   query_results.resize(resultsLenght);
-  for (int iKey = 0; iKey < numQueries * 2; iKey++) {
+  for (uint32_t iKey = 0; iKey < numQueries * 2; iKey++) {
     query_keys_lower.push_back(iKey);
   }
 
@@ -632,7 +633,7 @@ TEST(BTreeMap, RangeRandomKeys) {
   std::shuffle(query_keys_lower.begin(), query_keys_lower.end(), g);
 
   // upper query bound
-  for (int iKey = 0; iKey < numQueries * 2; iKey++) {
+  for (uint32_t iKey = 0; iKey < numQueries * 2; iKey++) {
     query_keys_upper.push_back(query_keys_lower[iKey] + averageLength - 1);
   }
 
@@ -668,7 +669,7 @@ TEST(BTreeMap, RangeRandomKeys) {
     auto offset = iQuery * averageLength * 2;
     auto result_ptr = query_results.data() + offset;
     auto key_iter = std::lower_bound(keys.begin(), keys.end(), query_min);
-    auto cur_result_index = 0;
+    uint32_t cur_result_index = 0;
     while (key_iter != keys.end() && *key_iter <= query_max) {
       auto value = to_value(*key_iter);
       EXPECT_EQ(*key_iter, result_ptr[cur_result_index]);  // expect key

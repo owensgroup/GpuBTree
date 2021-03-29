@@ -6,10 +6,9 @@ Muhammad A. Awad, Saman Ashkiani, Rob Johnson, Martín Farach-Colton, and John D
 
 ## Cloning and Building
 1. Clone: `git clone https://github.com/owensgroup/GpuBTree.git`
-2. Update the [CMakeLists.txt](https://github.com/owensgroup/GpuBTree/blob/master/CMakeLists.txt#L39) with the GPU hardware architecture
-3. `mkdir build && cd build`
-4. `cmake ..`
-5. `make`
+2. `mkdir build && cd build`
+3. `cmake ..`
+4. `make`
 
 ## Sample Driver Code
 The repository contains two sample driver code for [build](https://github.com/owensgroup/GpuBTree/blob/master/test/test_map.cu) and [query](https://github.com/owensgroup/GpuBTree/blob/master/test/test_map_search.cu) operations.

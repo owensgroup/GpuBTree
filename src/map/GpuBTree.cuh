@@ -34,7 +34,7 @@ namespace GpuBTree {
 template<typename KeyT,
          typename ValueT,
          typename SizeT = KeyT,
-         typename AllocatorT = BoolAllocator>
+         typename AllocatorT = PoolAllocator>
 class GpuBTreeMap {
  private:
   static constexpr uint32_t EMPTY_KEY = 0xFFFFFFFF;
@@ -81,7 +81,7 @@ class GpuBTreeMap {
       _mem_allocator = *mem_allocator;
       _handle_memory = false;
     } else {
-      BoolAllocator allocator;
+      PoolAllocator allocator;
       allocator.init();
       _mem_allocator = allocator;
       _mem_allocator.init();
