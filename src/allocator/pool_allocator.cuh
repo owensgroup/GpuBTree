@@ -28,23 +28,23 @@
 
 #include <cstdint>
 
-class BoolAllocator {
+class PoolAllocator {
  public:
-  BoolAllocator() {}
-  ~BoolAllocator() {}
+  PoolAllocator() {}
+  ~PoolAllocator() {}
   void init() {
-    CHECK_ERROR(memoryUtil::deviceAlloc(d_bool, MAX_SIZE));
-    CHECK_ERROR(memoryUtil::deviceSet(d_bool, MAX_SIZE, 0x00));
+    CHECK_ERROR(memoryUtil::deviceAlloc(d_pool, MAX_SIZE));
+    CHECK_ERROR(memoryUtil::deviceSet(d_pool, MAX_SIZE, 0x00));
     CHECK_ERROR(memoryUtil::deviceAlloc(d_count, 1));
     CHECK_ERROR(memoryUtil::deviceSet(d_count, uint32_t(1), 0x00));
   }
   void free() {
-    CHECK_ERROR(memoryUtil::deviceFree(d_bool));
+    CHECK_ERROR(memoryUtil::deviceFree(d_pool));
     CHECK_ERROR(memoryUtil::deviceFree(d_count));
   }
 
-  BoolAllocator& operator=(const BoolAllocator& rhs) {
-    d_bool = rhs.d_bool;
+  PoolAllocator& operator=(const PoolAllocator& rhs) {
+    d_pool = rhs.d_pool;
     d_count = rhs.d_count;
     return *this;
   }
@@ -55,7 +55,7 @@ class BoolAllocator {
   }
   template<typename AddressT = uint32_t>
   __device__ __forceinline__ uint32_t* getAddressPtr(AddressT& address) {
-    return d_bool + address * 32;
+    return d_pool + address * 32;
   }
   template<typename AddressT = uint32_t>
   __device__ __forceinline__ void freeAddress(AddressT& address) {}
@@ -65,7 +65,7 @@ class BoolAllocator {
   __host__ __device__ uint32_t getOffset() { return *d_count; }
 
  private:
-  uint32_t* d_bool;
+  uint32_t* d_pool;
 
   uint32_t MAX_SIZE = 1 << 25;
   uint32_t* d_count;

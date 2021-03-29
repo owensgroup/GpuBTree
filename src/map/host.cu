@@ -94,4 +94,28 @@ cudaError_t GpuBTreeMap<KeyT, ValueT, SizeT, AllocatorT>::deleteKeys(
 
   return cudaSuccess;
 }
+
+template<typename KeyT, typename ValueT, typename SizeT, typename AllocatorT>
+cudaError_t GpuBTreeMap<KeyT, ValueT, SizeT, AllocatorT>::rangeQuery(
+    uint32_t*& d_root,
+    KeyT*& d_queries_lower,
+    KeyT*& d_queries_upper,
+    ValueT*& d_range_results,
+    SizeT& count,
+    SizeT& range_lenght,
+    cudaStream_t stream_id) {
+  const uint32_t block_size = 512;
+  const uint32_t num_blocks = (count + block_size - 1) / block_size;
+  const uint32_t shared_bytes = 0;
+  kernels::range_b_tree<<<num_blocks, block_size, shared_bytes, stream_id>>>(
+      d_root,
+      d_queries_lower,
+      d_queries_upper,
+      d_range_results,
+      count,
+      range_lenght,
+      _mem_allocator);
+
+  return cudaSuccess;
+}
 };  // namespace GpuBTree

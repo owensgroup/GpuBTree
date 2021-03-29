@@ -632,5 +632,85 @@ __device__ void delete_unit_bulk(uint32_t& laneId,
     } while (isIntermediate);
   }
 }
+
+template<typename KeyT, typename ValueT, typename SizeT, typename AllocatorT>
+__device__ void range_unit(uint32_t& laneId,
+                           bool& to_search,
+                           KeyT& lower_bound,
+                           KeyT& upper_bound,
+                           ValueT*& range_results,
+                           uint32_t*& d_root,
+                           SizeT& range_length,
+                           AllocatorT* memAlloc) {
+  int dest_lane_pivot;
+  uint32_t rootAddress = *d_root;
+
+  while (auto work_queue = __ballot_sync(WARP_MASK, to_search)) {
+    auto src_lane = __ffs(work_queue) - 1;
+    KeyT src_key_lower = __shfl_sync(WARP_MASK, lower_bound, src_lane, 32);
+    KeyT src_key_upper = __shfl_sync(WARP_MASK, upper_bound, src_lane, 32);
+    KeyT next = rootAddress;
+    bool is_intermediate = true;
+    if (laneId == src_lane)
+      to_search = false;
+    do {
+      uint32_t src_unit_data = *(memAlloc->getAddressPtr(next) + laneId);
+      is_intermediate = !((src_unit_data & 0x80000000) == 0);
+      is_intermediate = __shfl_sync(WARP_MASK, is_intermediate, 0, 32);
+
+      uint32_t src_unit_key = src_unit_data & 0x7FFFFFFF;
+      bool hit = (src_key_lower >= src_unit_key) && src_unit_key;
+      // bool hit = ((src_key_lower <= src_unit_key && src_key_upper >= src_unit_key) &&
+      // src_unit_key);
+      uint32_t isFoundPivot_bmp = __ballot_sync(WARP_MASK, hit);
+      dest_lane_pivot = __ffs(~isFoundPivot_bmp & KEY_PIVOT_MASK_R);
+      if (is_intermediate) {
+        dest_lane_pivot = dest_lane_pivot ? dest_lane_pivot - 2 : 29;
+        next = __shfl_sync(WARP_MASK, src_unit_data, dest_lane_pivot, 32);
+        // if (next >= d_btree_last_ptr/* && laneId == 0*/)
+        //{
+        //	printf("out of bound!! \n");
+        //	return;
+        //}
+      } else {
+        uint32_t tid = threadIdx.x + blockIdx.x * blockDim.x;
+        tid /= 32;
+        tid *= 32;
+        tid += src_lane;
+        uint32_t offset = tid * range_length * 2;
+        // uint32_t maxOffset = offset + meanRange * 2;
+        while (true) {
+          hit = ((src_key_lower <= src_unit_key && src_key_upper >= src_unit_key) &&
+                 src_unit_key);
+          isFoundPivot_bmp = __ballot_sync(WARP_MASK, hit);
+          isFoundPivot_bmp &= KEY_PIVOT_MASK_R;
+          dest_lane_pivot = __ffs(isFoundPivot_bmp);
+
+          dest_lane_pivot--;
+          isFoundPivot_bmp >>= dest_lane_pivot;
+          uint32_t link_min =
+              __shfl_sync(WARP_MASK, src_unit_key, 30, 32) & 0x7FFFFFFF;  // get link min
+          src_unit_key = __shfl_down_sync(WARP_MASK, src_unit_key, dest_lane_pivot, 32);
+          uint32_t counter = __popc(isFoundPivot_bmp) * 2;
+          // if ((offset+counter) > maxOffset)
+          //{
+          //	return;
+          //}
+          if (laneId < counter)
+            range_results[offset + laneId] = src_unit_key - 2;
+          if (!link_min || src_key_upper < link_min)
+            break;            // done
+          offset += counter;  // load next node
+                              // if (laneId == 0 && offset > maxOffset)
+                              //{
+                              //	printf("out of bound!! \n");
+                              //}
+          next = __shfl_sync(WARP_MASK, src_unit_key, 31, 32) & 0x7FFFFFFF;
+          src_unit_key = *(memAlloc->getAddressPtr(next) + laneId);
+        }
+      }
+    } while (is_intermediate);
+  }
+}
 }  // namespace warps
 }  // namespace GpuBTree

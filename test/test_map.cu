@@ -45,7 +45,7 @@ int main(int argc, char* argv[]) {
   std::vector<uint32_t> values;
   keys.reserve(numKeys);
   values.reserve(numKeys);
-  for (int iKey = 0; iKey < numKeys; iKey++) {
+  for (uint32_t iKey = 0; iKey < numKeys; iKey++) {
     keys.push_back(iKey);
   }
 
@@ -55,7 +55,7 @@ int main(int argc, char* argv[]) {
   std::shuffle(keys.begin(), keys.end(), g);
 
   // assign the values
-  for (int iKey = 0; iKey < numKeys; iKey++) {
+  for (uint32_t iKey = 0; iKey < numKeys; iKey++) {
     values.push_back(keys[iKey]);
   }
 
