@@ -194,5 +194,127 @@ __global__ void range_b_tree(uint32_t* d_root,
                     &allocator);
 }
 
+
+// template<typename KeyT, typename ValueT, typename SizeT, typename AllocatorT>
+// __global__ void concurrent_ops_b_tree(uint32_t* d_root,
+//                                       KeyT* d_keys,
+//                                       ValueT* d_values,
+//                                       OperationT* d_ops,
+//                                       SizeT num_keys,
+  //                                     AllocatorT allocator) {
+  // uint32_t tid = threadIdx.x + blockIdx.x * blockDim.x;
+  // uint32_t laneId = threadIdx.x & 0x1F;
+
+  // KeyT myKey = 0xFFFFFFFF;
+  // ValueT myValue = 0xFFFFFFFF;
+  // OperationT myOp = OperationT::NOP;
+  // bool to_insert = false;
+  // bool to_delete = false;
+  // bool to_query = false;
+
+  // if ((tid - laneId) >= num_keys)
+  //   return;
+
+  // if (tid < num_keys) {
+  //   myKey = d_keys[tid] + 2;
+//     myOp = d_ops[tid];
+
+//     to_insert = myOp == OperationT::INSERT;
+//     to_delete = myOp == OperationT::DELETE;
+//     to_query = myOp == OperationT::QUERY;
+
+//     if (to_insert)
+//       myValue = d_values[tid] + 2;
+//   }
+
+//   warps::insertion_unit(to_insert, myKey, myValue, d_root, &allocator);
+//   warps::concurrent_search_unit(to_query, laneId, myKey, myValue, d_root, &allocator);
+
+//   if (to_query) {
+//     myValue = myValue ? myValue - 2 : myValue;
+//     d_values[tid] = myValue;
+//   }
+// }
+
+template<typename KeyT, typename ValueT, typename SizeT, typename AllocatorT>
+__global__ void fused_ops_b_tree(uint32_t* d_root,
+                             KeyT* d_keys,
+			                       ValueT* d_values,
+			                       OperationT* d_ops,
+   			                     SizeT num_keys,
+			                       KeyT* range_queries_lower,
+                             KeyT* range_queries_upper,
+                             ValueT* d_range_results,
+                             SizeT num_range_queries,
+                             SizeT range_length,
+			                       KeyT* delete_queries,
+			                       SizeT num_delete_queries,
+                             AllocatorT allocator) {
+  uint32_t tid = threadIdx.x + blockIdx.x * blockDim.x;
+  uint32_t laneId = lane_id();
+  if ((tid - laneId) >= num_range_queries)
+    return;
+  if ((tid - laneId) >= num_delete_queries)
+    return;
+  if ((tid - laneId) >= num_keys)
+    return;
+
+
+  KeyT myKey = 0xFFFFFFFF;
+  ValueT myValue = 0xFFFFFFFF;
+  OperationT myOp = OperationT::NOP;
+  bool to_insert = false;
+	//  bool to_delete = false;
+  bool to_query = false;
+
+  if (tid < num_keys) {
+    myKey = d_keys[tid] + 2;
+    myOp = d_ops[tid];
+
+    to_insert = myOp == OperationT::INSERT;
+//    to_delete = myOp == OperationT::DELETE;
+    to_query = myOp == OperationT::QUERY;
+
+    if (to_insert)
+      myValue = d_values[tid] + 2;
+  }
+
+  warps::insertion_unit(to_insert, myKey, myValue, d_root, &allocator);
+  warps::concurrent_search_unit(to_query, laneId, myKey, myValue, d_root, &allocator);
+
+
+
+  uint32_t lower_bound = 0;
+  uint32_t upper_bound = 0;
+  bool to_search = false;
+
+  if (tid < num_range_queries) {
+    lower_bound = range_queries_lower[tid] + 2;
+    upper_bound = range_queries_upper[tid] + 2;
+    to_search = true;
+  }
+
+  warps::range_unit(laneId,
+                    to_search,
+                    lower_bound,
+                    upper_bound,
+                    d_range_results,
+                    d_root,
+                    range_length,
+                    &allocator);
+
+  __syncthreads();
+  __threadfence();
+
+  KeyT deleteQuery = 0xFFFFFFFF;
+  if (tid < uint32_t(num_delete_queries)) {
+    deleteQuery = delete_queries[tid] + 2;
+  }
+
+  warps::delete_unit_bulk(laneId, deleteQuery, d_root, &allocator);
+
+}
+
+
 };  // namespace kernels
 };  // namespace GpuBTree

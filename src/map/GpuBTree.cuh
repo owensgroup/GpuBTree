@@ -73,6 +73,19 @@ class GpuBTreeMap {
                          SizeT& count,
                          SizeT& range_lenght,
                          cudaStream_t stream_id = 0);
+  cudaError_t concurrentOpsWithRangeQueries(uint32_t*& d_root,
+                                            KeyT*& d_keys,
+                                            ValueT*& d_values,
+                                            OperationT*& d_ops,
+                                            SizeT& num_keys,
+                                            KeyT*& range_queries_lower,
+                                            KeyT*& range_queries_upper,
+                                            ValueT*& d_range_results,
+                                            SizeT& num_range_queries,
+                                            SizeT& range_length,
+                                            KeyT*& delete_queries,
+                                            SizeT& num_delete_queries,
+                                            cudaStream_t stream_id = 0);
   bool _handle_memory;
 
  public:
@@ -238,5 +251,93 @@ class GpuBTreeMap {
 
     return cudaSuccess;
   }
+
+  cudaError_t concurrentOpsWithRangeQueries(
+    KeyT* keys,
+    ValueT* values,
+    OperationT* ops,
+    SizeT num_keys,
+    KeyT* range_queries_lower,
+    KeyT* range_queries_upper,
+    ValueT* range_results,
+    SizeT num_range_queries,
+    SizeT average_length,
+    KeyT* delete_queries,
+    SizeT num_delete_queries,
+    SourceT source = SourceT::DEVICE) {
+      KeyT* d_keys;
+      ValueT* d_values;
+      OperationT* d_ops;
+
+      KeyT* d_range_queries_lower;
+      KeyT* d_range_queries_upper;
+      ValueT* d_range_results;
+      auto total_range_length = num_range_queries * average_length * 2;
+
+      KeyT* d_delete_queries;
+      if (source == SourceT::HOST) {
+        // Search and insert
+        CHECK_ERROR(memoryUtil::deviceAlloc(d_keys, num_keys));
+        CHECK_ERROR(memoryUtil::deviceAlloc(d_values, num_keys));
+        CHECK_ERROR(memoryUtil::deviceAlloc(d_ops, num_keys));
+        CHECK_ERROR(memoryUtil::cpyToDevice(keys, d_keys, num_keys));
+        CHECK_ERROR(memoryUtil::cpyToDevice(values, d_values, num_keys));
+        CHECK_ERROR(memoryUtil::cpyToDevice(ops, d_ops, num_keys));
+
+        // Range queries
+        CHECK_ERROR(memoryUtil::deviceAlloc(d_range_queries_lower, num_range_queries));
+        CHECK_ERROR(memoryUtil::deviceAlloc(d_range_queries_upper, num_range_queries));
+        CHECK_ERROR(memoryUtil::deviceAlloc(d_range_results, total_range_length));
+        CHECK_ERROR(memoryUtil::cpyToDevice(range_queries_lower, d_range_queries_lower, num_range_queries));
+        CHECK_ERROR(memoryUtil::cpyToDevice(range_queries_upper, d_range_queries_upper, num_range_queries));
+
+        // Delete
+        CHECK_ERROR(memoryUtil::deviceAlloc(d_delete_queries, num_delete_queries));
+        CHECK_ERROR(memoryUtil::cpyToDevice(delete_queries, d_delete_queries, num_delete_queries));
+      } else {
+        d_keys = keys;
+        d_values = values;
+
+        d_range_queries_lower = range_queries_lower;
+        d_range_queries_upper = range_queries_upper;
+        d_range_results = range_results;
+
+        d_delete_queries = delete_queries;
+      }
+  
+      CHECK_ERROR(concurrentOpsWithRangeQueries(
+        _d_root, 
+        d_keys, 
+        d_values, 
+        d_ops, 
+        num_keys,
+        d_range_queries_lower,
+        d_range_queries_upper,
+        d_range_results,
+        num_range_queries,
+        average_length,
+        d_delete_queries,
+        num_delete_queries));
+  
+      if (source == SourceT::HOST) {
+        CHECK_ERROR(memoryUtil::cpyToHost(d_values, values, num_keys));
+        CHECK_ERROR(memoryUtil::deviceFree(d_keys));
+        CHECK_ERROR(memoryUtil::deviceFree(d_values));
+        CHECK_ERROR(memoryUtil::deviceFree(d_ops));
+
+        CHECK_ERROR(memoryUtil::cpyToHost(d_range_results, range_results, total_range_length));
+        CHECK_ERROR(memoryUtil::deviceFree(d_range_results));
+        CHECK_ERROR(memoryUtil::deviceFree(d_range_queries_lower));
+        CHECK_ERROR(memoryUtil::deviceFree(d_range_queries_upper));
+
+        CHECK_ERROR(memoryUtil::deviceFree(d_delete_queries));
+
+      }
+  
+      return cudaSuccess;
+      
+    }
+
+
 };
 };  // namespace GpuBTree
