@@ -30,6 +30,14 @@ enum class SourceT {
   HOST,
 };
 
+enum class OperationT {
+  INSERT,
+  QUERY,
+  DELETE,
+  RANGE,
+  NOP,
+};
+
 #define WARP_MASK 0xFFFFFFFF
 #define NODE_WIDTH 32
 #define WARP_WIDTH 32

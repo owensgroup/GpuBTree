@@ -73,6 +73,23 @@ class GpuBTreeMap {
                          SizeT& count,
                          SizeT& range_lenght,
                          cudaStream_t stream_id = 0);
+
+  cudaError_t concurrentOperations(uint32_t*& root,
+                                   KeyT*& d_keys,
+                                   ValueT*& d_values,
+                                   OperationT* d_ops,
+                                   SizeT& count,
+                                   cudaStream_t stream_id = 0);
+
+  cudaError_t concurrentOperations(uint32_t*& root,
+                                   KeyT*& d_keys_lower,
+                                   KeyT*& d_keys_upper,
+                                   ValueT*& d_values,
+                                   OperationT* d_ops,
+                                   SizeT& count,
+                                   SizeT& range_lenght,
+                                   cudaStream_t stream_id = 0);
+
   bool _handle_memory;
 
  public:
@@ -234,6 +251,80 @@ class GpuBTreeMap {
       CHECK_ERROR(memoryUtil::deviceFree(d_results));
       CHECK_ERROR(memoryUtil::deviceFree(d_queries_lower));
       CHECK_ERROR(memoryUtil::deviceFree(d_queries_upper));
+    }
+
+    return cudaSuccess;
+  }
+
+  cudaError_t concurrentOperations(KeyT* keys,
+                                   ValueT* values,
+                                   OperationT* ops,
+                                   SizeT count,
+                                   SourceT source = SourceT::DEVICE) {
+    KeyT* d_keys;
+    ValueT* d_values;
+    OperationT* d_ops;
+    if (source == SourceT::HOST) {
+      CHECK_ERROR(memoryUtil::deviceAlloc(d_keys, count));
+      CHECK_ERROR(memoryUtil::deviceAlloc(d_values, count));
+      CHECK_ERROR(memoryUtil::deviceAlloc(d_ops, count));
+      CHECK_ERROR(memoryUtil::cpyToDevice(keys, d_keys, count));
+      CHECK_ERROR(memoryUtil::cpyToDevice(values, d_values, count));
+      CHECK_ERROR(memoryUtil::cpyToDevice(ops, d_ops, count));
+    } else {
+      d_keys = keys;
+      d_values = values;
+      d_ops = ops;
+    }
+
+    CHECK_ERROR(concurrentOperations(_d_root, d_keys, d_values, d_ops, count));
+
+    if (source == SourceT::HOST) {
+      CHECK_ERROR(memoryUtil::cpyToHost(d_values, values, count));
+      CHECK_ERROR(memoryUtil::deviceFree(d_keys));
+      CHECK_ERROR(memoryUtil::deviceFree(d_values));
+      CHECK_ERROR(memoryUtil::deviceFree(d_ops));
+    }
+
+    return cudaSuccess;
+  }
+  cudaError_t concurrentOperations(KeyT* keys_lower,
+                                   KeyT* keys_upper,
+                                   ValueT* values,
+                                   OperationT* ops,
+                                   SizeT average_length,
+                                   SizeT count,
+                                   SourceT source = SourceT::DEVICE) {
+    KeyT* d_keys_lower;
+    KeyT* d_keys_upper;
+    KeyT* d_values;
+    OperationT* d_ops;
+    auto total_range_lenght = count * average_length * 2;
+    if (source == SourceT::HOST) {
+      CHECK_ERROR(memoryUtil::deviceAlloc(d_keys_lower, count));
+      CHECK_ERROR(memoryUtil::deviceAlloc(d_keys_upper, count));
+      CHECK_ERROR(memoryUtil::deviceAlloc(d_values, total_range_lenght));
+      CHECK_ERROR(memoryUtil::deviceAlloc(d_ops, count));
+      CHECK_ERROR(memoryUtil::cpyToDevice(keys_lower, d_keys_lower, count));
+      CHECK_ERROR(memoryUtil::cpyToDevice(keys_upper, d_keys_upper, count));
+      CHECK_ERROR(memoryUtil::cpyToDevice(values, d_values, total_range_lenght));
+      CHECK_ERROR(memoryUtil::cpyToDevice(ops, d_ops, count));
+    } else {
+      d_keys_lower = keys_lower;
+      d_keys_upper = keys_upper;
+      d_ops = ops;
+      d_values = values;
+    }
+
+    CHECK_ERROR(concurrentOperations(
+        _d_root, d_keys_lower, d_keys_upper, d_values, d_ops, count, average_length));
+
+    if (source == SourceT::HOST) {
+      CHECK_ERROR(memoryUtil::cpyToHost(d_values, values, total_range_lenght));
+      CHECK_ERROR(memoryUtil::deviceFree(d_values));
+      CHECK_ERROR(memoryUtil::deviceFree(d_ops));
+      CHECK_ERROR(memoryUtil::deviceFree(d_keys_lower));
+      CHECK_ERROR(memoryUtil::deviceFree(d_keys_upper));
     }
 
     return cudaSuccess;

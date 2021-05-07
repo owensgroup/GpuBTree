@@ -10,3 +10,8 @@ add_executable(test_search test_map_search.cu)
 set_target_properties(test_search PROPERTIES
 								FOLDER "tests")
 target_link_libraries(test_search PRIVATE gpu_btree)
+
+add_executable(test_map_concurrent test_map_concurrent.cu)
+set_target_properties(test_map_concurrent PROPERTIES
+								FOLDER "tests")
+target_link_libraries(test_map_concurrent PRIVATE gpu_btree)
