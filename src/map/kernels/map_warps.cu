@@ -869,9 +869,9 @@ __device__ void concurrent_range_unit(bool& to_search,
           //{
           //	return;
           //}
-          if (offset == tid * range_length * 2 && counter == 0) {
-            asm("trap;");
-          }
+          // if (offset == tid * range_length * 2 && counter == 0) {
+          //   asm("trap;");
+          // }
           if (laneId < counter)
             range_results[offset + laneId] = src_unit_key - 2;
           if (!link_min || src_key_upper < link_min)
@@ -886,12 +886,11 @@ __device__ void concurrent_range_unit(bool& to_search,
 
           is_intermediate = !((src_unit_data & 0x80000000) == 0);
           is_intermediate = __shfl_sync(WARP_MASK, is_intermediate, 0, 32);
-          
-          // it is possible at the beginning that the root (leaf) becomes an intermeidate 
+
+          // it is possible at the beginning that the root (leaf) becomes an intermeidate
           if (is_intermediate) {
             asm("trap;");
           }
-
         }
       }
     } while (is_intermediate);

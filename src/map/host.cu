@@ -131,7 +131,7 @@ cudaError_t GpuBTreeMap<KeyT, ValueT, SizeT, AllocatorT>::concurrentOperations(
   const uint32_t num_blocks = (count + block_size - 1) / block_size;
   const uint32_t shared_bytes = 0;
   kernels::concurrent_ops_b_tree<<<num_blocks, block_size, shared_bytes, stream_id>>>(
-          d_root, d_keys, d_values, d_ops, count, _mem_allocator);
+      d_root, d_keys, d_values, d_ops, count, _mem_allocator);
 
   return cudaSuccess;
 }
@@ -145,19 +145,19 @@ cudaError_t GpuBTreeMap<KeyT, ValueT, SizeT, AllocatorT>::concurrentOperations(
     OperationT* d_ops,
     SizeT& count,
     SizeT& range_lenght,
-    cudaStream_t stream_id = 0) {
+    cudaStream_t stream_id) {
   const uint32_t block_size = 128;
   const uint32_t num_blocks = (count + block_size - 1) / block_size;
   const uint32_t shared_bytes = 0;
   kernels::concurrent_ops_b_tree<<<num_blocks, block_size, shared_bytes, stream_id>>>(
-          d_root,
-          d_keys_lower,
-          d_keys_upper,
-          d_values,
-          d_ops,
-          count,
-          range_lenght,
-          _mem_allocator);
+      d_root,
+      d_keys_lower,
+      d_keys_upper,
+      d_values,
+      d_ops,
+      count,
+      range_lenght,
+      _mem_allocator);
 
   return cudaSuccess;
 }

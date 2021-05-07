@@ -208,7 +208,7 @@ __global__ void concurrent_ops_b_tree(uint32_t* d_root,
   ValueT myValue = 0xFFFFFFFF;
   OperationT myOp = OperationT::NOP;
   bool to_insert = false;
-  bool to_delete = false;
+  // bool to_delete = false;
   bool to_query = false;
 
   if ((tid - laneId) >= num_keys)
@@ -219,7 +219,7 @@ __global__ void concurrent_ops_b_tree(uint32_t* d_root,
     myOp = d_ops[tid];
 
     to_insert = myOp == OperationT::INSERT;
-    to_delete = myOp == OperationT::DELETE;
+    // to_delete = myOp == OperationT::DELETE;
     to_query = myOp == OperationT::QUERY;
 
     if (to_insert)
@@ -252,7 +252,7 @@ __global__ void concurrent_ops_b_tree(uint32_t* d_root,
   ValueT myValue = 0xFFFFFFFF;
   OperationT myOp = OperationT::NOP;
   bool to_insert = false;
-  bool to_delete = false;
+  // bool to_delete = false;
   bool to_query = false;
   bool to_range_query = false;
 
@@ -264,7 +264,7 @@ __global__ void concurrent_ops_b_tree(uint32_t* d_root,
     myOp = d_ops[tid];
 
     to_insert = myOp == OperationT::INSERT;
-    to_delete = myOp == OperationT::DELETE;
+    // to_delete = myOp == OperationT::DELETE;
     to_query = myOp == OperationT::QUERY;
     to_range_query = myOp == OperationT::RANGE;
 

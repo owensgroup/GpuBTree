@@ -150,7 +150,7 @@ void validate_tree_strucutre(key_t* h_tree,
   }
 
   std::sort(keys.begin(), keys.end());  // sort keys
-  for (int iKey = 0; iKey < keys.size(); iKey++) {
+  for (uint32_t iKey = 0; iKey < keys.size(); iKey++) {
     key_t treeKey = tree_pairs[iKey].first - 2;
     value_t treeVal = tree_pairs[iKey].second - 2;
     ASSERT_EQ(keys[iKey], treeKey);
@@ -715,7 +715,7 @@ TEST(BTreeMap, ConcurrentOpsInsertOnly) {
   std::vector<value_t> values;
   keys.reserve(maxKeys);
   values.reserve(maxKeys);
-  for (int iKey = 0; iKey < maxKeys; iKey++) {
+  for (uint32_t iKey = 0; iKey < maxKeys; iKey++) {
     keys.push_back(iKey);
   }
 
@@ -725,7 +725,7 @@ TEST(BTreeMap, ConcurrentOpsInsertOnly) {
   std::shuffle(keys.begin(), keys.end(), g);
 
   // assign the values
-  for (int iKey = 0; iKey < maxKeys; iKey++) {
+  for (uint32_t iKey = 0; iKey < maxKeys; iKey++) {
     values.push_back(keys[iKey]);
   }
 
@@ -770,15 +770,15 @@ TEST(BTreeMap, ConcurrentOpsInsertNewRangeQueryPast) {
   GpuBTree::GpuBTreeMap<key_t, value_t> btree;
 
   // Input number of keys
-  size_t initialNumKeys = 1 << 10;
-  size_t maxKeys = initialNumKeys * 4;
+  size_t initialNumKeys = 1 << 20;
+  size_t maxKeys = initialNumKeys * 10;
 
   // Prepare the keys
   std::vector<key_t> keys;
   std::vector<value_t> values;
   keys.reserve(maxKeys);
   values.reserve(maxKeys);
-  for (int iKey = 0; iKey < maxKeys; iKey++) {
+  for (uint32_t iKey = 0; iKey < maxKeys; iKey++) {
     keys.push_back(iKey);
   }
 
@@ -789,14 +789,14 @@ TEST(BTreeMap, ConcurrentOpsInsertNewRangeQueryPast) {
 
   // assign the values
   auto to_value = [](uint32_t key) { return key; };
-  for (int iKey = 0; iKey < maxKeys; iKey++) {
+  for (uint32_t iKey = 0; iKey < maxKeys; iKey++) {
     values.push_back(to_value(keys[iKey]));
   }
 
   // Build the tree
   btree.insertKeys(keys.data(), values.data(), initialNumKeys, SourceT::HOST);
 
-  uint32_t maxNodes = 1 << 19;
+  uint32_t maxNodes = maxKeys;
   key_t* h_tree = new uint32_t[maxNodes * NODE_WIDTH];
   uint32_t numNodes = 0;
   btree.compactTree(h_tree, maxNodes, numNodes, SourceT::HOST);
@@ -822,8 +822,8 @@ TEST(BTreeMap, ConcurrentOpsInsertNewRangeQueryPast) {
     if (iKey < queryBatchSize) {
       operations[iKey] = operation{keys[0], OperationT::RANGE};
     } else {
-      operations[iKey]=operation{keys[iKey - queryBatchSize + initialNumKeys], OperationT::INSERT
-    };
+      operations[iKey] =
+          operation{keys[iKey - queryBatchSize + initialNumKeys], OperationT::INSERT};
     }
   }
   std::shuffle(operations.begin(), operations.end(), g);
@@ -867,12 +867,12 @@ TEST(BTreeMap, ConcurrentOpsInsertNewRangeQueryPast) {
   btree.compactTree(h_tree, maxNodes, numNodes, SourceT::HOST);
   validate_tree_strucutre(h_tree, keys, initialNumKeys + insertionBatchSize);
 
-  std::unordered_set<key_t> new_keys_set(keys.data() + initialNumKeys,
-                                     keys.data() + initialNumKeys + insertionBatchSize);
+  std::unordered_set<key_t> new_keys_set(
+      keys.data() + initialNumKeys, keys.data() + initialNumKeys + insertionBatchSize);
   // Validate the query
   std::sort(keys.begin(), keys.begin() + initialNumKeys);
 
-  for (int iQuery = 0; iQuery < totalBatchSize; iQuery++) {
+  for (uint32_t iQuery = 0; iQuery < totalBatchSize; iQuery++) {
     if (ops[iQuery] == OperationT::RANGE) {
       auto query_min = keys_lower[iQuery];
       auto query_max = keys_upper[iQuery];
@@ -881,42 +881,49 @@ TEST(BTreeMap, ConcurrentOpsInsertNewRangeQueryPast) {
       auto key_iter =
           std::lower_bound(keys.begin(), keys.begin() + initialNumKeys, query_min);
 
-      std::cout << "[" << query_min << "," << query_max << "]: ";
-      //for (size_t res = 0; res < averageLength; res++) {
+      // std::cout << "[" << query_min << "," << query_max << "]: ";
+      // for (size_t res = 0; res < averageLength; res++) {
       //  std::cout << "{" << result_ptr[res * 2 + 0] << ",";
       //  std::cout << result_ptr[res * 2 + 1] << "}";
       //}
-      //std::cout << std::endl;
-      
+      // std::cout << std::endl;
+
       uint32_t cur_result_index = 0;
       while (key_iter != (keys.begin() + initialNumKeys) && *key_iter <= query_max) {
         auto value = to_value(*key_iter);
-       if (*key_iter ==  result_ptr[cur_result_index]) {
+        if (*key_iter == result_ptr[cur_result_index]) {
           std::cout << "{" << result_ptr[cur_result_index] << ",";
-         cur_result_index++;
-          std::cout << result_ptr[cur_result_index]  <<  ", O" << "}";
-         cur_result_index++;
+          EXPECT_EQ(*key_iter, result_ptr[cur_result_index]);  // expect key
+          cur_result_index++;
+          EXPECT_EQ(value, result_ptr[cur_result_index]);  // expect value
+          std::cout << result_ptr[cur_result_index] << ", O"
+                    << "}";
+          cur_result_index++;
           key_iter++;
-       } else {
-         auto search = new_keys_set.find(result_ptr[cur_result_index]);
-         if (search != new_keys_set.end()) {
-           std::cout << "{" << result_ptr[cur_result_index] << ",";
-           cur_result_index++;
-           std::cout << result_ptr[cur_result_index] << ", N"
-                     << "}";
-           cur_result_index++;
-         } else {
-           std::cout << "{Unknown key},";
-           assert(false);
-           break;
-           cur_result_index++;
-           cur_result_index++;
+        } else {
+          auto search = new_keys_set.find(result_ptr[cur_result_index]);
 
-         }
-       }
+          ASSERT_NE(search, new_keys_set.end());  // key should exist in the new patch
+          cur_result_index++;
+          EXPECT_EQ(to_value(result_ptr[cur_result_index]),
+                    result_ptr[cur_result_index]);  // expect value
+          cur_result_index++;
+          // if (search != new_keys_set.end()) {
+          //   std::cout << "{" << result_ptr[cur_result_index] << ",";
+          //   cur_result_index++;
+          //   std::cout << result_ptr[cur_result_index] << ", N"
+          //             << "}";
+          //   cur_result_index++;
+          // } else {
+          //   std::cout << "{Unknown key},";
+          //   assert(false);
+          //   break;
+          //   cur_result_index++;
+          //   cur_result_index++;
+          // }
+        }
       }
       std::cout << std::endl;
-
     }
   }
 
@@ -940,7 +947,7 @@ TEST(BTreeMap, ConcurrentOpsInsertNewQueryPast) {
   std::vector<value_t> values;
   keys.reserve(maxKeys);
   values.reserve(maxKeys);
-  for (int iKey = 0; iKey < maxKeys; iKey++) {
+  for (uint32_t iKey = 0; iKey < maxKeys; iKey++) {
     keys.push_back(iKey);
   }
 
@@ -950,7 +957,7 @@ TEST(BTreeMap, ConcurrentOpsInsertNewQueryPast) {
   std::shuffle(keys.begin(), keys.end(), g);
 
   // assign the values
-  for (int iKey = 0; iKey < maxKeys; iKey++) {
+  for (uint32_t iKey = 0; iKey < maxKeys; iKey++) {
     values.push_back(keys[iKey]);
   }
 
@@ -992,7 +999,7 @@ TEST(BTreeMap, ConcurrentOpsInsertNewQueryPast) {
   validate_tree_strucutre(h_tree, keys, initialNumKeys + insertionBatchSize);
 
   // Validate the query
-  for (int iKey = 0; iKey < queryBatchSize; iKey++) {
+  for (uint32_t iKey = 0; iKey < queryBatchSize; iKey++) {
     EXPECT_EQ(values[iKey], keys[iKey]);
   }
 
@@ -1017,7 +1024,7 @@ TEST(BTreeMap, ConcurrentOpsInsertNewQueryPast) {
 //   std::vector<value_t> values;
 //   keys.reserve(maxKeys);
 //   values.reserve(maxKeys);
-//   for (int iKey = 0; iKey < maxKeys; iKey++) {
+//   for (uint32_t iKey = 0; iKey < maxKeys; iKey++) {
 //     keys.push_back(iKey);
 //   }
 
@@ -1027,7 +1034,7 @@ TEST(BTreeMap, ConcurrentOpsInsertNewQueryPast) {
 //   std::shuffle(keys.begin(), keys.end(), g);
 
 //   // assign the values
-//   for (int iKey = 0; iKey < maxKeys; iKey++) {
+//   for (uint32_t iKey = 0; iKey < maxKeys; iKey++) {
 //     values.push_back(keys[iKey]);
 //   }
 
@@ -1079,7 +1086,7 @@ TEST(BTreeMap, ConcurrentOpsInsertNewQueryPast) {
 //   validate_tree_strucutre(h_tree, keys, totalBatchSize);
 
 //   // Validate the query
-//   for (int iKey = 0; iKey < totalBatchSize; iKey++) {
+//   for (uint32_t iKey = 0; iKey < totalBatchSize; iKey++) {
 //     if (ops[iKey] == OperationT::QUERY) {
 //       EXPECT_EQ(values[iKey], keys[iKey]);
 //     }
