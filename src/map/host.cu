@@ -1,4 +1,4 @@
-/*Copyright(c) 2020, The Regents of the University of California, Davis.            */
+﻿/*Copyright(c) 2020, The Regents of the University of California, Davis.            */
 /*                                                                                  */
 /*                                                                                  */
 /*Redistribution and use in source and binary forms, with or without modification,  */

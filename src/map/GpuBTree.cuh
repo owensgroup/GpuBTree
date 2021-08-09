@@ -1,4 +1,4 @@
-/*Copyright(c) 2020, The Regents of the University of California, Davis.            */
+﻿/*Copyright(c) 2020, The Regents of the University of California, Davis.            */
 /*                                                                                  */
 /*                                                                                  */
 /*Redistribution and use in source and binary forms, with or without modification,  */
@@ -82,7 +82,6 @@ class GpuBTreeMap {
       _handle_memory = false;
     } else {
       PoolAllocator allocator;
-      allocator.init();
       _mem_allocator = allocator;
       _mem_allocator.init();
       CHECK_ERROR(memoryUtil::deviceAlloc(_d_root, 1));
@@ -166,9 +165,9 @@ class GpuBTreeMap {
                           SizeT& num_nodes,
                           SourceT source = SourceT::DEVICE) {
     KeyT* d_tree;
-    KeyT* d_num_nodes;
+    SizeT* d_num_nodes;
     if (source == SourceT::HOST) {
-      CHECK_ERROR(memoryUtil::deviceAlloc(d_tree, max_nodes * NODE_WIDTH));
+      CHECK_ERROR(memoryUtil::deviceAlloc(d_tree, std::size_t(max_nodes) * NODE_WIDTH));
       CHECK_ERROR(memoryUtil::deviceAlloc(d_num_nodes, 1));
     } else {
       d_tree = btree;
@@ -181,7 +180,8 @@ class GpuBTreeMap {
       CHECK_ERROR(memoryUtil::cpyToHost(d_num_nodes, &num_nodes, 1));
       CHECK_ERROR(memoryUtil::deviceFree(d_num_nodes));
 
-      CHECK_ERROR(memoryUtil::cpyToHost(d_tree, btree, num_nodes * NODE_WIDTH));
+      CHECK_ERROR(
+          memoryUtil::cpyToHost(d_tree, btree, std::size_t(max_nodes) * NODE_WIDTH));
       CHECK_ERROR(memoryUtil::deviceFree(d_tree));
     }
 
@@ -238,5 +238,7 @@ class GpuBTreeMap {
 
     return cudaSuccess;
   }
+
+  double compute_usage() { return _mem_allocator.compute_usage(); }
 };
 };  // namespace GpuBTree

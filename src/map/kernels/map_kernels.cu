@@ -1,4 +1,4 @@
-/*Copyright(c) 2020, The Regents of the University of California, Davis.            */
+﻿/*Copyright(c) 2020, The Regents of the University of California, Davis.            */
 /*                                                                                  */
 /*                                                                                  */
 /*Redistribution and use in source and binary forms, with or without modification,  */
@@ -107,7 +107,7 @@ __global__ void compact_tree(uint32_t* d_root,
 
   uint32_t leftMostBranch = *d_root;
 
-  uint32_t nodesCount = 0;
+  SizeT nodesCount = 0;
   bool isIntermediate = true;
 
   while (isIntermediate) {

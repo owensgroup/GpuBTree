@@ -43,6 +43,13 @@ class PoolAllocator {
     CHECK_ERROR(memoryUtil::deviceFree(d_count));
   }
 
+  double compute_usage() {
+    uint32_t allocations_count;
+    CHECK_ERROR(memoryUtil::cpyToHost(d_count, &allocations_count, 1));
+    double num_bytes = double(allocations_count) * NODE_SIZE * sizeof(uint32_t);
+    return num_bytes / (1u << 30);
+  }
+
   PoolAllocator& operator=(const PoolAllocator& rhs) {
     d_pool = rhs.d_pool;
     d_count = rhs.d_count;
@@ -67,6 +74,8 @@ class PoolAllocator {
  private:
   uint32_t* d_pool;
 
-  uint32_t MAX_SIZE = 1 << 25;
+  static constexpr uint64_t NODE_SIZE = 32;
+  static constexpr uint64_t MAX_NODES = 1 << 25;
+  static constexpr uint64_t MAX_SIZE = MAX_NODES * NODE_SIZE;  // 4 GBs of memory
   uint32_t* d_count;
 };

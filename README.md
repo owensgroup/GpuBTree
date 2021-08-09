@@ -16,7 +16,7 @@ To test the code after building you can run: `./bin/test_map numberOfKeys` `./bi
 
 ## Limitaions
 - 32-bit keys and values ranging between (0 to 2^31 - 2)
-
+- In general, 90% of the tree nodes will be leaf nodes, which will be (on average) 2/3 full. So if we [allocate 4 GiBs](https://github.com/owensgroup/GpuBTree/blob/master/src/allocator/pool_allocator.cuh#L75), then the tree will store up to 2.4 GiBs pairs (i.e., around 307.2 million 4-bytes keys before performing  any deletion).
 ## Questions or Bug Report
 This code was tested on an NVIDIA Tesla K40c and Volta Titan V GPUs. Please open an [issue](https://github.com/owensgroup/GpuBTree/issues) if you find any bugs or if you have any questions. This [issue](https://github.com/owensgroup/GpuBTree/issues/1) contains the planned future additions to this repository.
 

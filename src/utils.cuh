@@ -29,23 +29,23 @@
 
 //#define DEBUG
 namespace memoryUtil {
-template<typename DataT, typename SizeT>
-cudaError_t cpyToHost(DataT*& src_data, DataT* dst_data, SizeT count) {
+template<typename DataT>
+cudaError_t cpyToHost(DataT*& src_data, DataT* dst_data, std::size_t count) {
   return cudaMemcpy(dst_data, src_data, sizeof(DataT) * count, cudaMemcpyDeviceToHost);
 }
 
-template<typename DataT, typename SizeT>
-cudaError_t cpyToDevice(DataT* src_data, DataT*& dst_data, SizeT count) {
+template<typename DataT>
+cudaError_t cpyToDevice(DataT* src_data, DataT*& dst_data, std::size_t count) {
   return cudaMemcpy(dst_data, src_data, sizeof(DataT) * count, cudaMemcpyHostToDevice);
 }
 
-template<typename DataT, typename SizeT>
-cudaError_t deviceAlloc(DataT*& src_data, SizeT count) {
+template<typename DataT>
+cudaError_t deviceAlloc(DataT*& src_data, std::size_t count) {
   return cudaMalloc((void**)&src_data, sizeof(DataT) * count);
 }
 
-template<typename DataT, typename SizeT, typename ByteT>
-cudaError_t deviceSet(DataT*& src_data, SizeT count, ByteT value) {
+template<typename DataT, typename ByteT>
+cudaError_t deviceSet(DataT*& src_data, std::size_t count, ByteT value) {
   return cudaMemset(src_data, value, sizeof(DataT) * count);
 }
 

@@ -149,6 +149,7 @@ int main(int argc, char* argv[]) {
          query_timer.getMsElapsed(),
          float(numQueries) * 1e-6 / query_timer.getSElapsed());
 
+  printf("Tree size: %f GiBs.\n", float(btree.compute_usage()));
   // cleanup
   cudaFree(d_keys);
   cudaFree(d_values);
