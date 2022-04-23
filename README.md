@@ -1,6 +1,9 @@
 # GpuBTree
 A GPU B-Tree optimized for updates.
 
+***An improved implementation of the GPU B-Tree is now available at [MVGpuBTree](https://github.com/owensgroup/MVGpuBTree).***
+
+
 ## Publication
 Muhammad A. Awad, Saman Ashkiani, Rob Johnson, Martín Farach-Colton, and John D. Owens. **Engineering a High-Performance GPU B-Tree**, In *Proceedings of the 24th ACM SIGPLAN Symposium on Principles and Practice of Parallel Programming,* PPoPP 2019, pages 145–157, February 2019. [[Link]](https://escholarship.org/content/qt1ph2x5td/qt1ph2x5td.pdf?t=pkuy5m)
 
